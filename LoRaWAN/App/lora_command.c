@@ -123,28 +123,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 
   {
-    .string = AT_VL,
-    .size_string = sizeof(AT_VL) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_VL"=<Level><CR>. Set the Verbose Level=[0:Off .. 3:High]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_verbose_get,
-    .set = AT_verbose_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_LTIME,
-    .size_string = sizeof(AT_LTIME) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_LTIME" Get the local time in UTC format\r\n",
-#endif /* !NO_HELP */
-    .get = AT_LocalTime_get,
-    .set = AT_return_error,
-    .run = AT_return_error,
-  },
-
-  {
     .string = AT_RESET,
     .size_string = sizeof(AT_RESET) - 1,
 #ifndef NO_HELP
@@ -155,41 +133,7 @@ static const struct ATCommand_s ATCommand[] =
     .run = AT_reset,
   },
 
-  /* Context Store commands */
-  {
-    .string = AT_RFS,
-    .size_string = sizeof(AT_RFS) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_RFS ": Restore EEPROM Factory Settings\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_return_error,
-    .run = AT_restore_factory_settings,
-  },
-
-  {
-    .string = AT_CS,
-    .size_string = sizeof(AT_CS) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_CS ": Store current context to EEPROM\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_return_error,
-    .run = AT_store_context,
-  },
-
   /* Keys, IDs and EUIs management commands */
-  {
-    .string = AT_JOINEUI,
-    .size_string = sizeof(AT_JOINEUI) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_JOINEUI"=<XX:XX:XX:XX:XX:XX:XX:XX><CR>. Get or Set the App Eui\r\n",
-#endif /* !NO_HELP */
-    .get = AT_JoinEUI_get,
-    .set = AT_JoinEUI_set,
-    .run = AT_return_error,
-  },
-
   {
     .string = AT_NWKKEY,
     .size_string = sizeof(AT_NWKKEY) - 1,
@@ -269,17 +213,6 @@ static const struct ATCommand_s ATCommand[] =
 
   /* LoRaWAN join and send data commands */
   {
-    .string = AT_JOIN,
-    .size_string = sizeof(AT_JOIN) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_JOIN"=<Mode><CR>. Join network with Mode=[0:ABP, 1:OTAA]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_Join,
-    .run = AT_return_error,
-  },
-
-  {
     .string = AT_LINKC,
     .size_string = sizeof(AT_LINKC) - 1,
 #ifndef NO_HELP
@@ -288,17 +221,6 @@ static const struct ATCommand_s ATCommand[] =
     .get = AT_return_error,
     .set = AT_return_error,
     .run = AT_Link_Check,
-  },
-
-  {
-    .string = AT_SEND,
-    .size_string = sizeof(AT_SEND) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_SEND"=<Port>:<Ack>:<Payload><CR>. Send binary data with the application Port=[1..199] and Ack=[0:unconfirmed, 1:confirmed]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_Send,
-    .run = AT_return_error,
   },
 
   /* LoRaWAN network management commands */
@@ -325,17 +247,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 
   {
-    .string = AT_BAND,
-    .size_string = sizeof(AT_BAND) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_BAND"=<BandID><CR>. Get or Set the Active Region BandID=[0:AS923, 1:AU915, 2:CN470, 3:CN779, 4:EU433, 5:EU868, 6:KR920, 7:IN865, 8:US915, 9:RU864]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_Region_get,
-    .set = AT_Region_set,
-    .run = AT_return_error,
-  },
-
-  {
     .string = AT_CLASS,
     .size_string = sizeof(AT_CLASS) - 1,
 #ifndef NO_HELP
@@ -343,17 +254,6 @@ static const struct ATCommand_s ATCommand[] =
 #endif /* !NO_HELP */
     .get = AT_DeviceClass_get,
     .set = AT_DeviceClass_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_DCS,
-    .size_string = sizeof(AT_DCS) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_DCS"=<DutyCycle><CR>. Get or Set the ETSI DutyCycle=[0:disable, 1:enable] - Only for testing\r\n",
-#endif /* !NO_HELP */
-    .get = AT_DutyCycle_get,
-    .set = AT_DutyCycle_set,
     .run = AT_return_error,
   },
 
@@ -380,28 +280,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 
   {
-    .string = AT_RX1DL,
-    .size_string = sizeof(AT_RX1DL) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_RX1DL"=<Delay><CR>. Get or Set the delay between the end of the Tx and the Rx Window 1 in ms\r\n",
-#endif /* !NO_HELP */
-    .get = AT_Rx1Delay_get,
-    .set = AT_Rx1Delay_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_RX2DL,
-    .size_string = sizeof(AT_RX2DL) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_RX2DL"=<Delay><CR>. Get or Set the delay between the end of the Tx and the Rx Window 2 in ms\r\n",
-#endif /* !NO_HELP */
-    .get = AT_Rx2Delay_get,
-    .set = AT_Rx2Delay_set,
-    .run = AT_return_error,
-  },
-
-  {
     .string = AT_RX2DR,
     .size_string = sizeof(AT_RX2DR) - 1,
 #ifndef NO_HELP
@@ -424,17 +302,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 
   {
-    .string = AT_TXP,
-    .size_string = sizeof(AT_TXP) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TXP"=<Power><CR>. Get or Set the Transmit Power=[0..15](valid range according to region)\r\n",
-#endif /* !NO_HELP */
-    .get = AT_TransmitPower_get,
-    .set = AT_TransmitPower_set,
-    .run = AT_return_error,
-  },
-
-  {
     .string = AT_PGSLOT,
     .size_string = sizeof(AT_PGSLOT) - 1,
 #ifndef NO_HELP
@@ -446,66 +313,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 
   /* Radio tests commands */
-  {
-    .string = AT_TTONE,
-    .size_string = sizeof(AT_TTONE) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TTONE" Starts RF Tone test\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_return_error,
-    .run = AT_test_txTone,
-  },
-
-  {
-    .string = AT_TRSSI,
-    .size_string = sizeof(AT_TRSSI) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TRSSI" Starts RF RSSI tone test\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_return_error,
-    .run = AT_test_rxRssi,
-  },
-
-  {
-    .string = AT_TCONF,
-    .size_string = sizeof(AT_TCONF) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TCONF"=<Freq in Hz>:<Power in dBm>:<Lora Bandwidth <0 to 6>, or Rx FSK Bandwidth in Hz>:<Lora SF or FSK datarate (bps)>:<CodingRate 4/5, 4/6, 4/7, 4/8>:\r\n\
-         <Lna>:<PA Boost>:<Modulation 0:FSK, 1:Lora, 2:BPSK, 3:MSK>:<PayloadLen in Bytes>:<FskDeviation in Hz>:<LowDrOpt 0:off, 1:on, 2:Auto>:\r\n\
-         <BTproduct: 0:no Gaussian Filter Applied, 1:BT=0,3, 2:BT=0,5, 3:BT=0,7, 4:BT=1><CR>. Configure RF test\r\n"
-    "AT+TCONF=868000000:14:50000:50000:4/5:0:0:0:16:25000:2:3 /*FSK*/\r\n"
-    "AT+TCONF=868000000:14:10000:10000:4/5:0:0:3:16:25000:2:3 /*MSK*/\r\n"
-    "AT+TCONF=868000000:14:4:12:4/5:0:0:1:16:25000:2:3 /*LORA*/\r\n",
-#endif /* !NO_HELP */
-    .get = AT_test_get_config,
-    .set = AT_test_set_config,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_TTX,
-    .size_string = sizeof(AT_TTX) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TTX"=<PacketNb><CR>. Starts RF Tx test: Nb of packets sent\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_test_tx,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_TRX,
-    .size_string = sizeof(AT_TRX) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TRX"=<PacketNb><CR>. Starts RF Rx test: Nb of packets expected\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_test_rx,
-    .run = AT_return_error,
-  },
-
   {
     .string = AT_TTH,
     .size_string = sizeof(AT_TTH) - 1,
@@ -553,29 +360,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 #endif /*AT_RADIO_ACCESS*/
 
-  /* LoraWAN Certif command */
-  {
-    .string = AT_CERTIF,
-    .size_string = sizeof(AT_CERTIF) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_CERTIF"=<Mode><CR>. Set the module in LoraWan Certification with Join Mode=[0:ABP, 1:OTAA]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_Certif,
-    .run = AT_return_error,
-  },
-
-  /* Information command */
-  {
-    .string = AT_BAT,
-    .size_string = sizeof(AT_BAT) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_BAT" Get the battery Level in mV\r\n",
-#endif /* !NO_HELP */
-    .get = AT_bat_get,
-    .set = AT_return_error,
-    .run = AT_return_error,
-  },
   /* USER CODE BEGIN ATCommand */
 // INSET commands
   {

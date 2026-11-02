@@ -1,125 +1,33 @@
 /*
- * lorawan_functions.c
+ * lw_config.c
  *
  *  Created on: 27. 10. 2026
  *      Author: pesek
+ *
+ *  LoRaWAN parameters set in the stack (region, DR, channels, class, ADR, power, duty cycle,
+ *  network type, RX delays, frame counters, session keys, DevAddr).
  */
-
-#include <stdbool.h>
 
 #include "main.h"
 #include "eeprom_wrapper.h"
 #include "LoRaMac.h"
 #include "LmHandler.h"
-#include "lora_app.h"
-#include "test_rf.h"
 #include "LoRaMacTypes.h"
 #include "Region.h"
+#include "RegionEU868.h"
 #include "LoRaMacCrypto.h"
 #include "stm32_tiny_sscanf.h"
-#include "RegionEU868.h"
 
-#include "lorawan_functions.h"
+#include "lw_core.h"
+#include "lw_config.h"
 
 static int32_t sscanf_16_hhx(const char *from, uint8_t *pt);
 static int32_t sscanf_uint32_as_hhx(const char *from, uint32_t *value);
 
-LW_InitError_t lw_nvm_get(LoRaMacNvmData_t** nvm){
-	MibRequestConfirm_t mib;
-	mib.Type = MIB_NVM_CTXS;
-	if (LoRaMacMibGetRequestConfirm(&mib) != LORAMAC_STATUS_OK){
-		return LW_ERROR;
-	}
-	*nvm = mib.Param.Contexts;
-	return LW_OK;
-}
-
-/* LoRaWAN NVM context (channels, keys, DevAddr, FCnt, power, RX delays, NbTrans...) -> flash.
-   Stored only when an AT command changed the configuration (nvm_dirty, set by the handlers) or force = 1.
-   LmHandlerNvmDataStore() itself writes the flash only when the context CRC changed; every write erases
-   a 2 KB page. FCntUp changes of the uplinks do not set nvm_dirty (not stored, by design for now).
-   Not in TEST mode: NvmDataMgmtStoreEnd() restarts LoRaMac (LoRaMacStart); nvm_dirty stays set */
-LW_InitError_t lw_nvm_store(uint8_t force){
-	if ((nvm_dirty == 0U) && (force == 0U)){
-		return LW_OK;
-	}
-	if (ram_vars.mode != 0U){
-		return LW_ERROR;
-	}
-	/* LoRaMacIsBusy(), not LmHandlerIsBusy(): the latter starts a join when not activated */
-	if (LoRaMacIsBusy()){
-		return LW_BUSY_ERROR;
-	}
-	if (LmHandlerNvmDataStore() == LORAMAC_HANDLER_ERROR){
-		return LW_ERROR;
-	}
-	nvm_dirty = 0U;
-	return LW_OK;
-}
-
-LW_InitError_t lw_mode_set(uint8_t mode){
-	if (mode == 0U){
-			if (ram_vars.mode == 1U){
-				/* TEST -> LWABP: radio test functions replaced the LoRaMac radio callbacks */
-				TST_stop();
-				LoRaWAN_Reconfigure();
-				ram_vars.mode = 0U;
-			}
-			LoRaWAN_StartAbp();
-	}
-	else if (mode == 1U){
-		if (ram_vars.mode == 0U){
-			/* LWABP -> TEST: stop LoRaMac, LmHandlerHalt() also refreshes the RAM backup
-			of the NVM context used by LoRaWAN_Reinit() */
-			if (LoRaMacIsBusy()){
-				return LW_BUSY_ERROR;
-			}
-			LmHandlerHalt();
-			LoRaMacStop();
-			ram_vars.mode = 1U;
-		}
-	}
-	else {
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-/* Ends the ABP session in RAM (MIB_NETWORK_ACTIVATION = NONE): LmHandlerJoinStatus() returns RESET,
-   so the LmHandler setters refused after the activation work again (LmHandlerSetKey, LmHandlerSetDevAddr,
-   LmHandlerSetNetworkID, LmHandlerSetActiveRegion). Activate again with LoRaWAN_StartAbp() / lw_mode_set(0).
-   Kept: keys, DevAddr, FCnt, channels, DR, TX power (the whole NVM context, only the activation changes).
-   While deactivated:
-   - uplinks are refused (LmHandlerSend -> LORAMAC_HANDLER_NO_NETWORK_JOINED)
-   - LmHandlerIsBusy() would start a join by itself (not called by this application)
-   - an NVM store (AT+LW=NET,OFF, AT+RESET, AT+WDT, lw_nvm_store) saves NONE: the module then boots
-     not activated. nvm_dirty is not set here, but a store of other pending changes saves it too.
-   Not in TEST mode: LoRaWAN_Reconfigure() at TEST -> LWABP restores the activation from the RAM backup. */
-LW_InitError_t lw_abp_deactivate(void){
-	MibRequestConfirm_t mib;
-
-	if (ram_vars.mode != 0U){
-		return LW_ERROR;
-	}
-	if (LmHandlerJoinStatus() != LORAMAC_HANDLER_SET){
-		return LW_OK;       /* not activated: nothing to do */
-	}
-	/* LoRaMacIsBusy(), not LmHandlerIsBusy(): the latter starts a join when not activated */
-	if (LoRaMacIsBusy()){
-		return LW_BUSY_ERROR;
-	}
-	mib.Type = MIB_NETWORK_ACTIVATION;
-	mib.Param.NetworkActivation = ACTIVATION_TYPE_NONE;
-	if (LoRaMacMibSetRequestConfirm(&mib) != LORAMAC_STATUS_OK){
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
 // Sets an active lorawan region
 // currently supports only EU868
 // If modem is already joined (ABP), doesnt do anything
-LW_InitError_t lw_region_set(LoRaMacRegion_t regionSet){
+LW_Status_t lw_region_set(LoRaMacRegion_t regionSet){
 	LoRaMacRegion_t RegionActive;
 	LmHandlerErrorStatus_t ret;
 	if (regionSet != LORAMAC_REGION_EU868){
@@ -145,7 +53,7 @@ LW_InitError_t lw_region_set(LoRaMacRegion_t regionSet){
 	}
 }
 
-LW_InitError_t lw_dr_set(uint8_t dr){
+LW_Status_t lw_dr_set(uint8_t dr){
 	LmHandlerErrorStatus_t ret;
 	bool adr;
 	LmHandlerGetAdrEnable(&adr);
@@ -203,7 +111,7 @@ static bool lw_ch_get_band(uint32_t freq, uint8_t *band){
    LoRaMacChannelAdd() refuses). Rx1Frequency (AT+RXWIN1) is kept.
    Frequency out of the EU868 sub-bands: allowed only with CT OFF (Seeed: customized band plans)
    and inside the radio range; duty cycle accounting as band 0 (1 %). */
-LW_InitError_t lw_ch_set(uint32_t id, uint32_t dr_min, uint32_t dr_max, uint32_t freq){
+LW_Status_t lw_ch_set(uint32_t id, uint32_t dr_min, uint32_t dr_max, uint32_t freq){
 	LoRaMacNvmData_t *nvm;
 	ChannelParams_t *ch;
 	uint8_t band;
@@ -249,7 +157,7 @@ LW_InitError_t lw_ch_set(uint32_t id, uint32_t dr_min, uint32_t dr_max, uint32_t
 	return LW_OK;
 }
 
-LW_InitError_t lw_class_set(DeviceClass_t class){
+LW_Status_t lw_class_set(DeviceClass_t class){
 	if (LmHandlerRequestClass(class) != LORAMAC_HANDLER_SUCCESS){
 		return LW_ERROR;
 	}
@@ -257,7 +165,7 @@ LW_InitError_t lw_class_set(DeviceClass_t class){
 	return LW_OK;
 }
 
-LW_InitError_t lw_adr_set(bool adr){
+LW_Status_t lw_adr_set(bool adr){
 	if (LmHandlerSetAdrEnable(adr) != LORAMAC_HANDLER_SUCCESS){
 		return LW_ERROR;
 	}
@@ -265,7 +173,7 @@ LW_InitError_t lw_adr_set(bool adr){
 	return LW_OK;
 }
 
-LW_InitError_t lw_power_set(long dbm, bool force){
+LW_Status_t lw_power_set(long dbm, bool force){
 	MibRequestConfirm_t mib;
 	LoRaMacNvmData_t *nvm;
 	GetPhyParams_t get;
@@ -327,7 +235,7 @@ LW_InitError_t lw_power_set(long dbm, bool force){
 	return LW_OK;
 }
 
-LW_InitError_t lw_dc_set(bool enable){
+LW_Status_t lw_dc_set(bool enable){
 	LmHandlerSetDutyCycleEnable(enable);
 	if (eeprom_set_dc((uint8_t)enable) != EE_OK){
 		return LW_ERROR;
@@ -336,7 +244,7 @@ LW_InitError_t lw_dc_set(bool enable){
 	return LW_OK;
 }
 
-LW_InitError_t lw_net_set(uint8_t public){
+LW_Status_t lw_net_set(uint8_t public){
 	MibRequestConfirm_t mib;
 
 	mib.Type = MIB_PUBLIC_NETWORK;
@@ -350,7 +258,7 @@ LW_InitError_t lw_net_set(uint8_t public){
 	return LW_OK;
 }
 
-LW_InitError_t lw_ul_set(uint32_t ul){
+LW_Status_t lw_ul_set(uint32_t ul){
 	LoRaMacNvmData_t *nvm;
 	if (lw_nvm_get(&nvm) != LW_OK){
 		return LW_ERROR;
@@ -375,7 +283,7 @@ LW_InitError_t lw_ul_set(uint32_t ul){
 	return LW_OK;
 }
 
-LW_InitError_t lw_dl_set(uint32_t dl){
+LW_Status_t lw_dl_set(uint32_t dl){
 	LoRaMacNvmData_t *nvm;
 	FCntList_t *fcnt;
 	uint32_t dl_stack;
@@ -401,35 +309,7 @@ LW_InitError_t lw_dl_set(uint32_t dl){
 	return LW_OK;
 }
 
-LW_InitError_t lw_ct_set(bool ct){
-	if (eeprom_set_ct(ct) != EE_OK){
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-LW_InitError_t lw_dumrx_set(bool dumrx){
-	if (eeprom_set_dumrx((uint8_t)dumrx) != EE_OK){
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-LW_InitError_t lw_thld_set(int16_t thld){
-	if (eeprom_set_thld(thld) != EE_OK){
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-LW_InitError_t lw_port_set(uint8_t port){
-	if (eeprom_set_port(port) != EE_OK){
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-LW_InitError_t lw_rx1Delay_set(uint32_t delay){
+LW_Status_t lw_rx1Delay_set(uint32_t delay){
 	if (LmHandlerSetRx1Delay(delay) != LORAMAC_HANDLER_SUCCESS){
 		return LW_ERROR;
 	}
@@ -437,7 +317,7 @@ LW_InitError_t lw_rx1Delay_set(uint32_t delay){
 	return LW_OK;
 }
 
-LW_InitError_t lw_rx2Delay_set(uint32_t delay){
+LW_Status_t lw_rx2Delay_set(uint32_t delay){
 	if (LmHandlerSetRx2Delay(delay) != LORAMAC_HANDLER_SUCCESS){
 		return LW_ERROR;
 	}
@@ -445,27 +325,7 @@ LW_InitError_t lw_rx2Delay_set(uint32_t delay){
 	return LW_OK;
 }
 
-LW_InitError_t lw_retry_set(uint8_t retry){
-	if (eeprom_set_retry(retry) != EE_OK){
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-//LW_InitError_t lw_rept_set(uint8_t rept){
-//	/* During AT+CMSGHEX NbTrans holds AT+RETRY, AT_msghex_done() would overwrite the new value */
-//	if ((msghex_name != NULL) || LoRaMacIsBusy()){
-//		return LW_BUSY_ERROR;
-//	}
-//	mib.Type = MIB_CHANNELS_NB_TRANS;
-//	mib.Param.ChannelsNbTrans = (uint8_t)rept;
-//	if (LoRaMacMibSetRequestConfirm(&mib) != LORAMAC_STATUS_OK){
-//		return LW_ERROR;
-//	}
-//	nvm_dirty = 1U;      /* LoRaWAN NVM context changed: stored at AT+LW=NET,OFF / AT+NVM / AT+RESET */
-//}
-
-LW_InitError_t lw_nwkskey_set(const char *key){
+LW_Status_t lw_nwkskey_set(const char *key){
 	uint8_t nwksKey[16];
 	if (sscanf_16_hhx(key, nwksKey) != 16){
 		return LW_PARAM_ERROR;
@@ -477,7 +337,7 @@ LW_InitError_t lw_nwkskey_set(const char *key){
 	return LW_OK;
 }
 
-LW_InitError_t lw_appskey_set(const char *key){
+LW_Status_t lw_appskey_set(const char *key){
 	uint8_t appsKey[16];
 	if (sscanf_16_hhx(key, appsKey) != 16){
 		return LW_PARAM_ERROR;
@@ -489,7 +349,7 @@ LW_InitError_t lw_appskey_set(const char *key){
 	return LW_OK;
 }
 
-LW_InitError_t lw_devaddr_set(const char *devaddr){
+LW_Status_t lw_devaddr_set(const char *devaddr){
 	uint32_t devAddr;
 	if (sscanf_uint32_as_hhx(devaddr, &devAddr) != 4){
 		return LW_PARAM_ERROR;
@@ -499,7 +359,6 @@ LW_InitError_t lw_devaddr_set(const char *devaddr){
 	}
 	return LW_OK;
 }
-
 
 static int32_t sscanf_16_hhx(const char *from, uint8_t *pt) {
   return tiny_sscanf(from, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",

@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include "usart.h"
+#include "sys_debug.h"      /* DBG_LED_ON / DBG_LED_OFF */
 /* USER CODE END Includes */
 
 /* External variables ---------------------------------------------------------*/
@@ -94,7 +95,7 @@ void PWR_ExitOffMode(void)
 void PWR_EnterStopMode(void)
 {
   /* USER CODE BEGIN EnterStopMode_1 */
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);      /* LED off: MCU goes to Stop mode (LED active low) */
+  DBG_LED_OFF();                /* MCU goes to Stop mode (DEBUGGING only) */
 //  lpm_log("+LPM: SLEEP\r\n");
   /* USER CODE END EnterStopMode_1 */
   HAL_SuspendTick();
@@ -114,7 +115,7 @@ void PWR_EnterStopMode(void)
 void PWR_ExitStopMode(void)
 {
   /* USER CODE BEGIN ExitStopMode_1 */
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);    /* LED on: MCU woken up */
+  DBG_LED_ON();                 /* MCU woken up (DEBUGGING only) */
   /* USER CODE END ExitStopMode_1 */
   /* Resume sysTick : work around for debugger problem in dual core */
   HAL_ResumeTick();

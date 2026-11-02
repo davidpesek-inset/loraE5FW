@@ -136,7 +136,15 @@ extern "C" {
 #endif /* DISABLE_PROBE_GPIO */
 
 /* USER CODE BEGIN EM */
-
+/* Devkit LED (PB5, active low): on while the MCU is awake. Only with DEBUGGING == 1 (sys_conf.h),
+   otherwise PB5 stays in analog mode (MX_GPIO_Init) and these do nothing */
+#if defined (DEBUGGING) && (DEBUGGING == 1)
+#define DBG_LED_ON()    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET)
+#define DBG_LED_OFF()   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET)
+#else
+#define DBG_LED_ON()    do { } while (0)
+#define DBG_LED_OFF()   do { } while (0)
+#endif /* DEBUGGING */
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

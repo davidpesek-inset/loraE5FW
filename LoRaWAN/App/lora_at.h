@@ -29,6 +29,7 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "LmHandler.h"
 #include "stm32_adv_trace.h"
+#include "lw_types.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -77,16 +78,9 @@ typedef enum eATEerror
 /* AT Command strings. Commands start with AT */
 /* General commands */
 #define AT_VER        "+VER"
-#define AT_VL         "+VL"
-#define AT_LTIME      "+LTIME"
 #define AT_RESET      "+RESET"
 
-/* Context Store */
-#define AT_RFS        "+RFS"
-#define AT_CS         "+CS"
-
 /* Keys, IDs and EUIs management commands */
-#define AT_JOINEUI    "+APPEUI" /*to match with V1.0.x specification- For V1.1.x "+APPEUI" will be replaced by "+JOINEUI"*/
 #define AT_NWKKEY     "+NWKKEY"
 #define AT_APPKEY     "+APPKEY"
 #define AT_NWKSKEY    "+NWKSKEY"
@@ -96,43 +90,25 @@ typedef enum eATEerror
 #define AT_NWKID      "+NWKID"
 
 /* LoRaWAN join and send data commands */
-#define AT_JOIN       "+JOIN"
 #define AT_LINKC      "+LINKC"
-#define AT_SEND       "+SEND"
 
 /* LoRaWAN network management commands */
 #define AT_ADR        "+ADR"
 #define AT_DR         "+DR"
-#define AT_BAND       "+BAND"
 #define AT_CLASS      "+CLASS"
-#define AT_DCS        "+DCS"
 #define AT_JN1DL      "+JN1DL"
 #define AT_JN2DL      "+JN2DL"
-#define AT_RX1DL      "+RX1DL"
-#define AT_RX2DL      "+RX2DL"
 #define AT_RX2DR      "+RX2DR"
 #define AT_RX2FQ      "+RX2FQ"
-#define AT_TXP        "+TXP"
 #define AT_PGSLOT     "+PGSLOT"
 
 /* Radio tests commands */
-#define AT_TTONE      "+TTONE"
-#define AT_TRSSI      "+TRSSI"
-#define AT_TCONF      "+TCONF"
-#define AT_TTX        "+TTX"
-#define AT_TRX        "+TRX"
 #define AT_TTH        "+TTH"
 #define AT_TOFF       "+TOFF"
 
 /* Radio access commands */
 #define AT_REGW       "+REGW"
 #define AT_REGR       "+REGR"
-
-/* LoraWAN Certif command */
-#define AT_CERTIF     "+CERTIF"
-
-/* Information command */
-#define AT_BAT        "+BAT"
 
 /* USER CODE BEGIN EM */
 // INSET commands
@@ -227,63 +203,13 @@ ATEerror_t AT_run();
 ATEerror_t AT_version_get(const char *param);
 
 /**
-  * @brief  Get the verbose level
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_verbose_get(const char *param);
-
-/**
-  * @brief  Set the verbose level
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_verbose_set(const char *param);
-
-/**
-  * @brief  Get the local time in UTC format
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_LocalTime_get(const char *param);
-
-/**
   * @brief  Trig a reset of the MCU
   * @param  param string of the AT command - unused
   * @retval AT_OK
   */
 ATEerror_t AT_reset(const char *param);
 
-/* --------------- Context Store commands --------------- */
-/**
-  * @brief  Restore factory settings in Eeprom
-  * @param  param string of the AT command - unused
-  * @retval AT_OK
-  */
-ATEerror_t AT_restore_factory_settings(const char *param);
-
-/**
-  * @brief  Store current settings in Eeprom
-  * @param  param string of the AT command - unused
-  * @retval AT_OK
-  */
-ATEerror_t AT_store_context(const char *param);
-
 /* --------------- Keys, IDs and EUIs management commands --------------- */
-/**
-  * @brief  Print Join Eui
-  * @param  param string of the AT command
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_JoinEUI_get(const char *param);
-
-/**
-  * @brief  Set Join Eui
-  * @param  param string of the AT command
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_JoinEUI_set(const char *param);
-
 /**
   * @brief  Print Network Key
   * @param  param string of the AT command
@@ -384,25 +310,11 @@ ATEerror_t AT_NetworkID_set(const char *param);
 
 /* --------------- LoRaWAN join and send data commands --------------- */
 /**
-  * @brief  Join a network
-  * @param  param String parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Join(const char *param);
-
-/**
   * @brief  Piggyback a Link Check Request to the next uplink
   * @param  param String parameter
   * @retval AT_OK if OK, or an appropriate AT_xxx error code
   */
 ATEerror_t AT_Link_Check(const char *param);
-
-/**
-  * @brief  Print last received message
-  * @param  param String parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Send(const char *param);
 
 /* --------------- LoRaWAN network management commands --------------- */
 /**
@@ -434,20 +346,6 @@ ATEerror_t AT_DataRate_get(const char *param);
 ATEerror_t AT_DataRate_set(const char *param);
 
 /**
-  * @brief  Print actual Active Region
-  * @param  param string of the AT command - unused
-  * @retval AT_OK
-  */
-ATEerror_t AT_Region_get(const char *param);
-
-/**
-  * @brief  Set Active Region
-  * @param  param string of the AT command
-  * @retval AT_OK if OK
-  */
-ATEerror_t AT_Region_set(const char *param);
-
-/**
   * @brief  Print the Device Class
   * @param  param String pointing to provided param
   * @retval AT_OK if OK, or an appropriate AT_xxx error code
@@ -460,20 +358,6 @@ ATEerror_t AT_DeviceClass_get(const char *param);
   * @retval AT_OK if OK, or an appropriate AT_xxx error code
   */
 ATEerror_t AT_DeviceClass_set(const char *param);
-
-/**
-  * @brief  Get ETSI Duty Cycle parameter
-  * @param  param String pointing to provided param
-  * @retval AT_OK
-  */
-ATEerror_t AT_DutyCycle_get(const char *param);
-
-/**
-  * @brief  Set ETSI Duty Cycle parameter
-  * @param  param String pointing to provided Duty Cycle value
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_DutyCycle_set(const char *param);
 
 /**
   * @brief  Print the delay between the end of the Tx and the Join Rx Window 1
@@ -504,34 +388,6 @@ ATEerror_t AT_JoinAcceptDelay2_get(const char *param);
 ATEerror_t AT_JoinAcceptDelay2_set(const char *param);
 
 /**
-  * @brief  Print the delay between the end of the Tx and the Rx Window 1
-  * @param  param String pointing to provided param
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx1Delay_get(const char *param);
-
-/**
-  * @brief  Set the delay between the end of the Tx and the Rx Window 1
-  * @param  param String pointing to provided param
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx1Delay_set(const char *param);
-
-/**
-  * @brief  Print the delay between the end of the Tx and the Rx Window 2
-  * @param  param String pointing to provided param
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx2Delay_get(const char *param);
-
-/**
-  * @brief  Set the delay between the end of the Tx and the Rx Window 2
-  * @param  param String pointing to provided param
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx2Delay_set(const char *param);
-
-/**
   * @brief  Print Rx2 window data rate
   * @param  param String pointing to parameter
   * @retval AT_OK if OK, or an appropriate AT_xxx error code
@@ -560,20 +416,6 @@ ATEerror_t AT_Rx2Frequency_get(const char *param);
 ATEerror_t AT_Rx2Frequency_set(const char *param);
 
 /**
-  * @brief  Print Transmit Power
-  * @param  param String pointing to provided power
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_TransmitPower_get(const char *param);
-
-/**
-  * @brief  Set Transmit Power
-  * @param  param String pointing to provided power
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_TransmitPower_set(const char *param);
-
-/**
   * @brief  Get the unicast pingslot periodicity, Data rate and PsFrequency
   * @param  param String parameter
   * @retval AT_OK
@@ -588,48 +430,6 @@ ATEerror_t AT_PingSlot_get(const char *param);
 ATEerror_t AT_PingSlot_set(const char *param);
 
 /* --------------- Radio tests commands --------------- */
-/**
-  * @brief  Start Tx test
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_txTone(const char *param);
-
-/**
-  * @brief  Start Rx tone
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_rxRssi(const char *param);
-
-/**
-  * @brief  Get Rx or Tx test config
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_get_config(const char *param);
-
-/**
-  * @brief  Set Rx or Tx test config
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_set_config(const char *param);
-
-/**
-  * @brief  Start Tx LoRa test
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_tx(const char *param);
-
-/**
-  * @brief  Start Rx LoRa test
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_rx(const char *param);
-
 /**
   * @brief  Start Tx hopping
   * @param  param String parameter
@@ -659,22 +459,6 @@ ATEerror_t AT_write_register(const char *param);
   */
 ATEerror_t AT_read_register(const char *param);
 
-/* --------------- LoraWAN Certif command --------------- */
-/**
-  * @brief  set the Modem in Certif Mode
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_Certif(const char *param);
-
-/* --------------- Information command --------------- */
-/**
-  * @brief  Get the battery level
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_bat_get(const char *param);
-
 /* USER CODE BEGIN EFP */
 // INSET commands
 ATEerror_t AT_wdt_set(const char *param);
@@ -699,7 +483,7 @@ ATEerror_t AT_key_set(const char *param);
 ATEerror_t AT_id_set(const char *param);
 ATEerror_t AT_msghex_set(const char *param);
 ATEerror_t AT_cmsghex_set(const char *param);
-void AT_msghex_done(LmHandlerTxParams_t *params);
+void AT_msghex_result(LW_TxResult_t result, bool confirmed);
 ATEerror_t AT_rept_set(const char *param);
 ATEerror_t AT_temp_run(const char *param);
 ATEerror_t AT_rtc_set(const char *param);

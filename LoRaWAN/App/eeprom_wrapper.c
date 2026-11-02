@@ -39,20 +39,12 @@ EepromVars_t eeprom_vars =
   .ct              = EE_DEF_CT,
 };
 
-/* TODO: verify the test RF defaults on the original module */
-
 RamVars_t ram_vars =
 {
   .mode          = 0U,              /* 0:LWABP, 1:TEST */
   .log_level     = 0U,              /* QUIET */
   .lowpower_auto = 1U,              /* AUTOON */
   .lowpower_once = 0U,
-  .adr			 = 0U,
-  .class		 = 0U,
-  .rx1_delay	 = 1U,
-  .rx2_delay	 = 10U,
-  .rx1_win		 = 0U,
-  .rx2_win		 = 0U,
   .ch_data		 = {
 		  [0] = { 863800000U, 0U, 5U },
 		  [1] = { 864000000U, 0U, 5U },
@@ -63,15 +55,6 @@ RamVars_t ram_vars =
 		  [6] = { 865000000U, 0U, 5U },
 		  [7] = { 865200000U, 0U, 5U },
   },
-  .test_freq_hz  = 868000000U,
-  .test_sf       = 12U,
-  .test_bw_khz   = 125U,
-  .test_txpr     = 8U,
-  .test_rxpr     = 8U,
-  .test_pow_dbm  = 14,
-  .test_crc      = 1U,
-  .test_iq       = 0U,
-  .test_net      = 0U,
 };
 
 /* Writes one variable only when the stored value differs.
@@ -99,7 +82,7 @@ EE_Status ee_write(uint16_t va, uint32_t data)
 
 EE_Status eeprom_vars_init(void)
 {
-  uint32_t v;;
+  uint32_t v;
   /* First boot: no marker yet, store the defaults from eeprom_vars */
   if (EE_ReadVariable32bits(EE_VA_INIT_MARK, &v) == EE_NO_DATA)
   {

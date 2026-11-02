@@ -1020,7 +1020,7 @@ static void UpdateRxSlotIdleState( void )
 }
 
 /* USER (Seeed AT+LW=DUMRX,ON): skip the RX1/RX2 windows after an unconfirmed uplink.
-   Weak default = windows always open; the application overrides it (lora_at.c). */
+   Weak default = windows always open; the application overrides it (LoRaWAN/App/lw_options.c). */
 __attribute__((weak)) bool LoRaMacSkipRxWindows( void )
 {
     return false;
@@ -1143,7 +1143,7 @@ static void PrepareRxDoneAbort( void )
 }
 
 /* USER (Seeed AT+LW=CT,OFF): any valid downlink in RX1/RX2 terminates a confirmed uplink.
-   Weak default = strict LoRaWAN behaviour; the application overrides it (lora_at.c). */
+   Weak default = strict LoRaWAN behaviour; the application overrides it (LoRaWAN/App/lw_options.c). */
 __attribute__((weak)) bool LoRaMacAckRelaxed( void )
 {
     return false;

@@ -45,7 +45,11 @@
 #include "LoRaMacCrypto.h"
 #include "Region.h"
 #include "lora_app.h"
-#include "lorawan_functions.h"
+#include "lw_core.h"
+#include "lw_config.h"
+#include "lw_link.h"
+#include "lw_options.h"
+#include "dev_system.h"
 /* USER CODE END Includes */
 
 /* External variables ---------------------------------------------------------*/
@@ -84,19 +88,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 static bool ClassBEnableRequest = false;
-
-/*!
- * User application buffer
- */
-static uint8_t AppDataBuffer[LORAWAN_APP_DATA_BUFFER_MAX_SIZE];
-
-/*!
- * User application data structure
- */
-static LmHandlerAppData_t AppData = { 0, 0, AppDataBuffer };
-
-/* Dummy data sent periodically to let the tester respond with start test command*/
-static UTIL_TIMER_Object_t TxCertifTimer;
 
 /* USER CODE BEGIN PV */
 
@@ -143,17 +134,6 @@ static void print_d(int32_t value);
 static void print_u(uint32_t value);
 
 /**
-  * @brief  Certif Rejoin timer callback function
-  * @param  context ptr of Certif Rejoin context
-  */
-static void OnCertifTimer(void *context);
-
-/**
-  * @brief  Certif send function
-  */
-static void CertifSend(void);
-
-/**
   * @brief  Check if character in parameter is alphanumeric
   * @param  Char for the alphanumeric check
   */
@@ -174,13 +154,6 @@ static uint8_t Char2Nibble(char Char);
   */
 static int32_t stringToData(const char *str, uint8_t *data, uint32_t Size);
 
-static void AT_flush_output(void)
-{
-  while (UTIL_ADV_TRACE_IsBufferEmpty() == 0U)
-  {
-  }
-  HAL_Delay(2);        /* 1 byte at 9600 Bd = 1.04 ms */
-}
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
 
@@ -273,11 +246,8 @@ void AT_event_receive(LmHandlerAppData_t *appData, LmHandlerRxParams_t *params)
 void AT_event_confirm(LmHandlerTxParams_t *params)
 {
   /* USER CODE BEGIN AT_event_confirm_1 */
-  /* AT+MSGHEX/CMSGHEX end (NbTrans restore, +..: Done); Seeed emulation: no +EVT:SEND_CONFIRMED */
-  if (params != NULL)
-  {
-    AT_msghex_done(params);
-  }
+  /* Seeed emulation: no +EVT:SEND_CONFIRMED. The AT+MSGHEX/CMSGHEX end comes through
+     lw_tx_done() -> AT_msghex_result() */
   return;
   /* USER CODE END AT_event_confirm_1 */
   if ((params != NULL) && (params->MsgType == LORAMAC_HANDLER_CONFIRMED_MSG) && (params->AckReceived != 0))
@@ -412,168 +382,21 @@ ATEerror_t AT_version_get(const char *param)
   /* USER CODE END AT_version_get_2 */
 }
 
-ATEerror_t AT_verbose_get(const char *param)
-{
-  /* USER CODE BEGIN AT_verbose_get_1 */
-
-  /* USER CODE END AT_verbose_get_1 */
-  print_u(UTIL_ADV_TRACE_GetVerboseLevel());
-  return AT_OK;
-  /* USER CODE BEGIN AT_verbose_get_2 */
-
-  /* USER CODE END AT_verbose_get_2 */
-}
-
-ATEerror_t AT_verbose_set(const char *param)
-{
-  /* USER CODE BEGIN AT_verbose_set_1 */
-
-  /* USER CODE END AT_verbose_set_1 */
-  const char *buf = param;
-  int32_t lvl_nb;
-
-  /* read and set the verbose level */
-  if (1 != tiny_sscanf(buf, "%u", &lvl_nb))
-  {
-    AT_PRINTF("AT+VL: verbose level is not well set\r\n");
-    return AT_PARAM_ERROR;
-  }
-  if ((lvl_nb > VLEVEL_H) || (lvl_nb < VLEVEL_OFF))
-  {
-    AT_PRINTF("AT+VL: verbose level out of range => 0(VLEVEL_OFF) to 3(VLEVEL_H)\r\n");
-    return AT_PARAM_ERROR;
-  }
-
-  UTIL_ADV_TRACE_SetVerboseLevel(lvl_nb);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_verbose_set_2 */
-
-  /* USER CODE END AT_verbose_set_2 */
-}
-
-ATEerror_t AT_LocalTime_get(const char *param)
-{
-  /* USER CODE BEGIN AT_LocalTime_get_1 */
-
-  /* USER CODE END AT_LocalTime_get_1 */
-  struct tm localtime;
-  SysTime_t UnixEpoch = SysTimeGet();
-  UnixEpoch.Seconds -= 18; /*removing leap seconds*/
-
-  UnixEpoch.Seconds += 3600 * 2; /*adding 2 hours*/
-
-  SysTimeLocalTime(UnixEpoch.Seconds,  & localtime);
-
-  AT_PRINTF("LTIME:%02dh%02dm%02ds on %02d/%02d/%04d\r\n",
-            localtime.tm_hour, localtime.tm_min, localtime.tm_sec,
-            localtime.tm_mday, localtime.tm_mon + 1, localtime.tm_year + 1900);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_LocalTime_get_2 */
-
-  /* USER CODE END AT_LocalTime_get_2 */
-}
-
 ATEerror_t AT_reset(const char *param)
 {
   /* USER CODE BEGIN AT_reset_1 */
-  (void)lw_nvm_store(0U);     /* changed configuration must not be lost by the reset (AT+UART=BR -> AT+RESET) */
   AT_PPRINTF("+RESET: OK\r\n");
-  AT_flush_output();      /* the answer must leave the UART before the reset (ESP waits for it before the baud change) */
-  NVIC_SystemReset();
+  /* stores the changed configuration (AT+UART=BR -> AT+RESET) and waits until the answer has left
+     the UART (the ESP waits for it before the baud change), then resets */
+  dev_reset();
+  return AT_OK;           /* not reached */
   /* USER CODE END AT_reset_1 */
   /* USER CODE BEGIN AT_reset_2 */
 
   /* USER CODE END AT_reset_2 */
 }
 
-/* ---------------  Context Store commands --------------------------- */
-ATEerror_t AT_restore_factory_settings(const char *param)
-{
-  /* USER CODE BEGIN AT_restore_factory_settings_1 */
-
-  /* USER CODE END AT_restore_factory_settings_1 */
-  /* store nvm in flash */
-  if (FLASH_IF_Erase(LORAWAN_NVM_BASE_ADDRESS, FLASH_PAGE_SIZE) == FLASH_IF_OK)
-  {
-    /* System Reboot*/
-    NVIC_SystemReset();
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_restore_factory_settings_2 */
-
-  /* USER CODE END AT_restore_factory_settings_2 */
-}
-
-ATEerror_t AT_store_context(const char *param)
-{
-  /* USER CODE BEGIN AT_store_context_1 */
-
-  /* USER CODE END AT_store_context_1 */
-  LmHandlerErrorStatus_t status = LORAMAC_HANDLER_ERROR;
-
-  status = LmHandlerNvmDataStore();
-
-  if (status == LORAMAC_HANDLER_NVM_DATA_UP_TO_DATE)
-  {
-    AT_PRINTF("NVM DATA UP TO DATE\r\n");
-  }
-  else if (status == LORAMAC_HANDLER_ERROR)
-  {
-    AT_PRINTF("NVM DATA STORE FAILED\r\n");
-    return AT_ERROR;
-  }
-  return AT_OK;
-  /* USER CODE BEGIN AT_store_context_2 */
-
-  /* USER CODE END AT_store_context_2 */
-}
-
 /* --------------- Keys, IDs and EUIs management commands --------------- */
-ATEerror_t AT_JoinEUI_get(const char *param)
-{
-  /* USER CODE BEGIN AT_JoinEUI_get_1 */
-
-  /* USER CODE END AT_JoinEUI_get_1 */
-  uint8_t appEUI[8];
-  if (LmHandlerGetAppEUI(appEUI) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_8_02x(appEUI);
-  return AT_OK;
-  /* USER CODE BEGIN AT_JoinEUI_get_2 */
-
-  /* USER CODE END AT_JoinEUI_get_2 */
-}
-
-ATEerror_t AT_JoinEUI_set(const char *param)
-{
-  /* USER CODE BEGIN AT_JoinEUI_set_1 */
-
-  /* USER CODE END AT_JoinEUI_set_1 */
-  uint8_t JoinEui[8];
-  if (tiny_sscanf(param, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-                  &JoinEui[0], &JoinEui[1], &JoinEui[2], &JoinEui[3],
-                  &JoinEui[4], &JoinEui[5], &JoinEui[6], &JoinEui[7]) != 8)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (LORAMAC_HANDLER_SUCCESS != LmHandlerSetAppEUI(JoinEui))
-  {
-    return AT_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_JoinEUI_set_2 */
-
-  /* USER CODE END AT_JoinEUI_set_2 */
-}
-
 ATEerror_t AT_NwkKey_get(const char *param)
 {
   /* USER CODE BEGIN AT_NwkKey_get_1 */
@@ -828,29 +651,6 @@ ATEerror_t AT_NetworkID_set(const char *param)
 }
 
 /* --------------- LoRaWAN join and send data commands --------------- */
-ATEerror_t AT_Join(const char *param)
-{
-  /* USER CODE BEGIN AT_Join_1 */
-
-  /* USER CODE END AT_Join_1 */
-  switch (param[0])
-  {
-    case '0':
-      LmHandlerJoin(ACTIVATION_TYPE_ABP, true);
-      break;
-    case '1':
-      LmHandlerJoin(ACTIVATION_TYPE_OTAA, true);
-      break;
-    default:
-      return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Join_2 */
-
-  /* USER CODE END AT_Join_2 */
-}
-
 ATEerror_t AT_Link_Check(const char *param)
 {
   /* USER CODE BEGIN AT_Link_Check_1 */
@@ -865,129 +665,6 @@ ATEerror_t AT_Link_Check(const char *param)
   /* USER CODE BEGIN AT_Link_Check_2 */
 
   /* USER CODE END AT_Link_Check_2 */
-}
-
-ATEerror_t AT_Send(const char *param)
-{
-  /* USER CODE BEGIN AT_Send_1 */
-
-  /* USER CODE END AT_Send_1 */
-  const char *buf = param;
-  uint16_t bufSize = strlen(param);
-  uint32_t appPort;
-  LmHandlerMsgTypes_t isTxConfirmed;
-  unsigned size = 0;
-  char hex[3] = {0, 0, 0};
-  LmHandlerErrorStatus_t lmhStatus = LORAMAC_HANDLER_ERROR;
-  ATEerror_t status = AT_ERROR;
-
-  /* read and set the application port */
-  if (1 != tiny_sscanf(buf, "%u:", &appPort))
-  {
-    AT_PRINTF("AT+SEND without the application port\r\n");
-    return AT_PARAM_ERROR;
-  }
-
-  /* skip the application port */
-  while (('0' <= buf[0]) && (buf[0] <= '9') && bufSize > 1)
-  {
-    buf ++;
-    bufSize --;
-  };
-
-  if ((bufSize == 0) || (':' != buf[0]))
-  {
-    AT_PRINTF("AT+SEND missing : character after app port\r\n");
-    return AT_PARAM_ERROR;
-  }
-  else
-  {
-    /* skip the char ':' */
-    buf ++;
-    bufSize --;
-  }
-
-  switch (buf[0])
-  {
-    case '0':
-      isTxConfirmed = LORAMAC_HANDLER_UNCONFIRMED_MSG;
-      break;
-    case '1':
-      isTxConfirmed = LORAMAC_HANDLER_CONFIRMED_MSG;
-      break;
-    default:
-      AT_PRINTF("AT+SEND without the acknowledge flag\r\n");
-      return AT_PARAM_ERROR;
-  }
-
-  if (bufSize > 0)
-  {
-    /* skip the acknowledge flag */
-    buf ++;
-    bufSize --;
-  }
-
-  if ((bufSize == 0) || (':' != buf[0]))
-  {
-    AT_PRINTF("AT+SEND missing : character after ack flag\r\n");
-    return AT_PARAM_ERROR;
-  }
-  else
-  {
-    /* skip the char ':' */
-    buf ++;
-    bufSize --;
-  }
-
-  while ((size < LORAWAN_APP_DATA_BUFFER_MAX_SIZE) && (bufSize > 1))
-  {
-    hex[0] = buf[size * 2];
-    hex[1] = buf[size * 2 + 1];
-    if (tiny_sscanf(hex, "%hhx", &AppData.Buffer[size]) != 1)
-    {
-      return AT_PARAM_ERROR;
-    }
-    size++;
-    bufSize -= 2;
-  }
-  if (bufSize != 0)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  AppData.BufferSize = size;
-  AppData.Port = appPort;
-
-  lmhStatus = LmHandlerSend(&AppData, isTxConfirmed, false);
-
-  switch (lmhStatus)
-  {
-    case LORAMAC_HANDLER_SUCCESS:
-      status = AT_OK;
-      break;
-    case LORAMAC_HANDLER_BUSY_ERROR:
-    case LORAMAC_HANDLER_COMPLIANCE_RUNNING:
-      status = (LmHandlerJoinStatus() != LORAMAC_HANDLER_SET) ? AT_NO_NET_JOINED : AT_BUSY_ERROR;
-      break;
-    case LORAMAC_HANDLER_NO_NETWORK_JOINED:
-      status = AT_NO_NET_JOINED;
-      break;
-    case LORAMAC_HANDLER_DUTYCYCLE_RESTRICTED:
-      status = AT_DUTYCYCLE_RESTRICTED;
-      break;
-    case LORAMAC_HANDLER_CRYPTO_ERROR:
-      status = AT_CRYPTO_ERROR;
-      break;
-    case LORAMAC_HANDLER_ERROR:
-    default:
-      status = AT_ERROR;
-      break;
-  }
-
-  return status;
-  /* USER CODE BEGIN AT_Send_2 */
-
-  /* USER CODE END AT_Send_2 */
 }
 
 /* --------------- LoRaWAN network management commands --------------- */
@@ -1074,59 +751,6 @@ ATEerror_t AT_DataRate_set(const char *param){
 	return AT_OK;
 }
 
-ATEerror_t AT_Region_get(const char *param)
-{
-  /* USER CODE BEGIN AT_Region_get_1 */
-
-  /* USER CODE END AT_Region_get_1 */
-  const char *regionStrings[] =
-  {
-    "AS923", "AU915", "CN470", "CN779", "EU433", "EU868", "KR920", "IN865", "US915", "RU864"
-  };
-  LoRaMacRegion_t region;
-  if (LmHandlerGetActiveRegion(&region) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (region > LORAMAC_REGION_RU864)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  AT_PRINTF("%d:%s\r\n", region, regionStrings[region]);
-  return AT_OK;
-  /* USER CODE BEGIN AT_Region_get_2 */
-
-  /* USER CODE END AT_Region_get_2 */
-}
-
-ATEerror_t AT_Region_set(const char *param)
-{
-  /* USER CODE BEGIN AT_Region_set_1 */
-
-  /* USER CODE END AT_Region_set_1 */
-  LoRaMacRegion_t region;
-  if (tiny_sscanf(param, "%hhu", &region) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-  if (region > LORAMAC_REGION_RU864)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (LmHandlerSetActiveRegion(region) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Region_set_2 */
-
-  /* USER CODE END AT_Region_set_2 */
-}
-
 ATEerror_t AT_DeviceClass_get(const char *param)
 {
   /* USER CODE BEGIN AT_DeviceClass_get_1 */
@@ -1187,7 +811,7 @@ ATEerror_t AT_DeviceClass_set(const char *param)
   /* USER CODE BEGIN AT_DeviceClass_set_1 */
 
   /* USER CODE END AT_DeviceClass_set_1 */
-  LW_InitError_t errorStatus = LORAMAC_HANDLER_SUCCESS;
+  LW_Status_t errorStatus = LORAMAC_HANDLER_SUCCESS;
   LoraInfo_t *loraInfo = LoraInfo_GetPtr();
   if (loraInfo == NULL)
   {
@@ -1229,45 +853,6 @@ ATEerror_t AT_DeviceClass_set(const char *param)
   /* USER CODE BEGIN AT_DeviceClass_set_2 */
 
   /* USER CODE END AT_DeviceClass_set_2 */
-}
-
-ATEerror_t AT_DutyCycle_get(const char *param)
-{
-  /* USER CODE BEGIN AT_DutyCycle_get_1 */
-
-  /* USER CODE END AT_DutyCycle_get_1 */
-  bool dutyCycleEnable;
-  if (LmHandlerGetDutyCycleEnable(&dutyCycleEnable) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_d(dutyCycleEnable);
-  return AT_OK;
-  /* USER CODE BEGIN AT_DutyCycle_get_2 */
-
-  /* USER CODE END AT_DutyCycle_get_2 */
-}
-
-ATEerror_t AT_DutyCycle_set(const char *param)
-{
-  /* USER CODE BEGIN AT_DutyCycle_set_1 */
-
-  /* USER CODE END AT_DutyCycle_set_1 */
-  switch (param[0])
-  {
-    case '0':
-    case '1':
-      LmHandlerSetDutyCycleEnable(param[0] - '0');
-      break;
-    default:
-      return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_DutyCycle_set_2 */
-
-  /* USER CODE END AT_DutyCycle_set_2 */
 }
 
 ATEerror_t AT_JoinAcceptDelay1_get(const char *param)
@@ -1346,84 +931,6 @@ ATEerror_t AT_JoinAcceptDelay2_set(const char *param)
   /* USER CODE BEGIN AT_JoinAcceptDelay2_set_2 */
 
   /* USER CODE END AT_JoinAcceptDelay2_set_2 */
-}
-
-ATEerror_t AT_Rx1Delay_get(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx1Delay_get_1 */
-
-  /* USER CODE END AT_Rx1Delay_get_1 */
-  uint32_t rxDelay;
-  if (LmHandlerGetRx1Delay(&rxDelay) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_u(rxDelay);
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx1Delay_get_2 */
-
-  /* USER CODE END AT_Rx1Delay_get_2 */
-}
-
-ATEerror_t AT_Rx1Delay_set(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx1Delay_set_1 */
-
-  /* USER CODE END AT_Rx1Delay_set_1 */
-  uint32_t rxDelay;
-  if (tiny_sscanf(param, "%lu", &rxDelay) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (LmHandlerSetRx1Delay(rxDelay) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx1Delay_set_2 */
-
-  /* USER CODE END AT_Rx1Delay_set_2 */
-}
-
-ATEerror_t AT_Rx2Delay_get(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx2Delay_get_1 */
-
-  /* USER CODE END AT_Rx2Delay_get_1 */
-  uint32_t rxDelay;
-  if (LmHandlerGetRx2Delay(&rxDelay) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_u(rxDelay);
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx2Delay_get_2 */
-
-  /* USER CODE END AT_Rx2Delay_get_2 */
-}
-
-ATEerror_t AT_Rx2Delay_set(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx2Delay_set_1 */
-
-  /* USER CODE END AT_Rx2Delay_set_1 */
-  uint32_t rxDelay;
-  if (tiny_sscanf(param, "%lu", &rxDelay) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (LmHandlerSetRx2Delay(rxDelay) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx2Delay_set_2 */
-
-  /* USER CODE END AT_Rx2Delay_set_2 */
 }
 
 ATEerror_t AT_Rx2DataRate_get(const char *param)
@@ -1510,46 +1017,6 @@ ATEerror_t AT_Rx2Frequency_set(const char *param)
   /* USER CODE END AT_Rx2Frequency_set_2 */
 }
 
-ATEerror_t AT_TransmitPower_get(const char *param)
-{
-  /* USER CODE BEGIN AT_TransmitPower_get_1 */
-
-  /* USER CODE END AT_TransmitPower_get_1 */
-  int8_t txPower;
-  if (LmHandlerGetTxPower(&txPower) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_d(txPower);
-  return AT_OK;
-  /* USER CODE BEGIN AT_TransmitPower_get_2 */
-
-  /* USER CODE END AT_TransmitPower_get_2 */
-}
-
-ATEerror_t AT_TransmitPower_set(const char *param)
-{
-  /* USER CODE BEGIN AT_TransmitPower_set_1 */
-
-  /* USER CODE END AT_TransmitPower_set_1 */
-  int8_t txPower;
-  if (tiny_sscanf(param, "%hhu", &txPower) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (LmHandlerSetTxPower(txPower) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_TransmitPower_set_2 */
-
-  /* USER CODE END AT_TransmitPower_set_2 */
-}
-
 ATEerror_t AT_PingSlot_get(const char *param)
 {
   /* USER CODE BEGIN AT_PingSlot_get_1 */
@@ -1596,386 +1063,6 @@ ATEerror_t AT_PingSlot_set(const char *param)
 }
 
 /* --------------- Radio tests commands --------------- */
-ATEerror_t AT_test_txTone(const char *param)
-{
-  /* USER CODE BEGIN AT_test_txTone_1 */
-
-  /* USER CODE END AT_test_txTone_1 */
-  if (0U == TST_TxTone())
-  {
-    return AT_OK;
-  }
-  else
-  {
-    return AT_BUSY_ERROR;
-  }
-  /* USER CODE BEGIN AT_test_txTone_2 */
-
-  /* USER CODE END AT_test_txTone_2 */
-}
-
-ATEerror_t AT_test_rxRssi(const char *param)
-{
-  /* USER CODE BEGIN AT_test_rxRssi_1 */
-
-  /* USER CODE END AT_test_rxRssi_1 */
-  if (0U == TST_RxRssi())
-  {
-    return AT_OK;
-  }
-  else
-  {
-    return AT_BUSY_ERROR;
-  }
-  /* USER CODE BEGIN AT_test_rxRssi_2 */
-
-  /* USER CODE END AT_test_rxRssi_2 */
-}
-
-ATEerror_t AT_test_get_config(const char *param)
-{
-  /* USER CODE BEGIN AT_test_get_config_1 */
-
-  /* USER CODE END AT_test_get_config_1 */
-  testParameter_t testParam;
-  uint32_t loraBW[7] = {7812, 15625, 31250, 62500, 125000, 250000, 500000};
-
-  TST_get_config(&testParam);
-
-  AT_PRINTF("1: Freq= %d Hz\r\n", testParam.freq);
-  AT_PRINTF("2: Power= %d dBm\r\n", testParam.power);
-
-  if ((testParam.modulation == TEST_FSK) || (testParam.modulation == TEST_MSK))
-  {
-    /*fsk*/
-    AT_PRINTF("3: Bandwidth= %d Hz\r\n", testParam.bandwidth);
-    AT_PRINTF("4: FSK datarate= %d bps\r\n", testParam.loraSf_datarate);
-    AT_PRINTF("5: Coding Rate not applicable\r\n");
-    AT_PRINTF("6: LNA State= %d  \r\n", testParam.lna);
-    AT_PRINTF("7: PA Boost State= %d  \r\n", testParam.paBoost);
-    if (testParam.modulation == TEST_FSK)
-    {
-      AT_PRINTF("8: modulation FSK\r\n");
-    }
-    else
-    {
-      AT_PRINTF("8: modulation MSK\r\n");
-    }
-    AT_PRINTF("9: Payload len= %d Bytes\r\n", testParam.payloadLen);
-    if (testParam.modulation == TEST_FSK)
-    {
-      AT_PRINTF("10: FSK deviation= %d Hz\r\n", testParam.fskDev);
-    }
-    else
-    {
-      AT_PRINTF("10: FSK deviation forced to FSK datarate/4\r\n");
-    }
-    AT_PRINTF("11: LowDRopt not applicable\r\n");
-    AT_PRINTF("12: FSK gaussian BT product= %d \r\n", testParam.BTproduct);
-  }
-  else if (testParam.modulation == TEST_LORA)
-  {
-    /*Lora*/
-    AT_PRINTF("3: Bandwidth= %d (=%d Hz)\r\n", testParam.bandwidth, loraBW[testParam.bandwidth]);
-    AT_PRINTF("4: SF= %d \r\n", testParam.loraSf_datarate);
-    AT_PRINTF("5: CR= %d (=4/%d) \r\n", testParam.codingRate, testParam.codingRate + 4);
-    AT_PRINTF("6: LNA State= %d  \r\n", testParam.lna);
-    AT_PRINTF("7: PA Boost State= %d  \r\n", testParam.paBoost);
-    AT_PRINTF("8: modulation LORA\r\n");
-    AT_PRINTF("9: Payload len= %d Bytes\r\n", testParam.payloadLen);
-    AT_PRINTF("10: Frequency deviation not applicable\r\n");
-    AT_PRINTF("11: LowDRopt[0 to 2]= %d \r\n", testParam.lowDrOpt);
-    AT_PRINTF("12 BT product not applicable\r\n");
-  }
-  else
-  {
-    AT_PRINTF("4: BPSK datarate= %d bps\r\n", testParam.loraSf_datarate);
-  }
-  return AT_OK;
-  /* USER CODE BEGIN AT_test_get_config_2 */
-
-  /* USER CODE END AT_test_get_config_2 */
-}
-
-ATEerror_t AT_test_set_config(const char *param)
-{
-  /* USER CODE BEGIN AT_test_set_config_1 */
-
-  /* USER CODE END AT_test_set_config_1 */
-  testParameter_t testParam = {0};
-  uint32_t freq;
-  int32_t power;
-  uint32_t bandwidth;
-  uint32_t loraSf_datarate;
-  uint32_t codingRate;
-  uint32_t lna;
-  uint32_t paBoost;
-  uint32_t modulation;
-  uint32_t payloadLen;
-  uint32_t fskDeviation;
-  uint32_t lowDrOpt;
-  uint32_t BTproduct;
-  uint32_t crNum;
-
-  if (13 == tiny_sscanf(param, "%d:%d:%d:%d:%d/%d:%d:%d:%d:%d:%d:%d:%d",
-                        &freq,
-                        &power,
-                        &bandwidth,
-                        &loraSf_datarate,
-                        &crNum,
-                        &codingRate,
-                        &lna,
-                        &paBoost,
-                        &modulation,
-                        &payloadLen,
-                        &fskDeviation,
-                        &lowDrOpt,
-                        &BTproduct))
-  {
-    /*extend to new format for extended*/
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-  /*get current config*/
-  TST_get_config(&testParam);
-
-  /* 8: modulation check and set */
-  /* first check because required for others */
-  if (modulation == TEST_FSK)
-  {
-    testParam.modulation = TEST_FSK;
-  }
-  else if (modulation == TEST_LORA)
-  {
-    testParam.modulation = TEST_LORA;
-  }
-  else if (modulation == TEST_BPSK)
-  {
-    testParam.modulation = TEST_BPSK;
-  }
-  else if (modulation == TEST_MSK)
-  {
-    testParam.modulation = TEST_MSK;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 1: frequency check and set */
-  if (freq < 1000)
-  {
-    /*given in MHz*/
-    testParam.freq = freq * 1000000;
-  }
-  else
-  {
-    testParam.freq = freq;
-  }
-
-  /* 2: power check and set */
-  if ((power >= -9) && (power <= 22))
-  {
-    testParam.power = power;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 3: bandwidth check and set */
-  if ((testParam.modulation == TEST_FSK) && (bandwidth >= 4800) && (bandwidth <= 467000))
-  {
-    testParam.bandwidth = bandwidth;
-  }
-  else if ((testParam.modulation == TEST_MSK) && (bandwidth >= 4800) && (bandwidth <= 467000))
-  {
-    testParam.bandwidth = bandwidth;
-  }
-  else if ((testParam.modulation == TEST_LORA) && (bandwidth <= BW_500kHz))
-  {
-    testParam.bandwidth = bandwidth;
-  }
-  else if (testParam.modulation == TEST_BPSK)
-  {
-    /* Not used */
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 4: datarate/spreading factor check and set */
-  if ((testParam.modulation == TEST_FSK) && (loraSf_datarate >= 600) && (loraSf_datarate <= 300000))
-  {
-    testParam.loraSf_datarate = loraSf_datarate;
-  }
-  else if ((testParam.modulation == TEST_MSK) && (loraSf_datarate >= 100) && (loraSf_datarate <= 300000))
-  {
-    testParam.loraSf_datarate = loraSf_datarate;
-  }
-  else if ((testParam.modulation == TEST_LORA) && (loraSf_datarate >= 5) && (loraSf_datarate <= 12))
-  {
-    testParam.loraSf_datarate = loraSf_datarate;
-  }
-  else if ((testParam.modulation == TEST_BPSK) && (loraSf_datarate <= 1000))
-  {
-    testParam.loraSf_datarate = loraSf_datarate;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 5: coding rate check and set */
-  if ((testParam.modulation == TEST_FSK) || (testParam.modulation == TEST_MSK) || (testParam.modulation == TEST_BPSK))
-  {
-    /* Not used */
-  }
-  else if ((testParam.modulation == TEST_LORA) && ((codingRate >= 5) && (codingRate <= 8)))
-  {
-    testParam.codingRate = codingRate - 4;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 6: lna state check and set */
-  if (lna <= 1)
-  {
-    testParam.lna = lna;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 7: pa boost check and set */
-  if (paBoost <= 1)
-  {
-    /* Not used */
-    testParam.paBoost = paBoost;
-  }
-
-  /* 9: payloadLen check and set */
-  if ((payloadLen != 0) && (payloadLen < 256))
-  {
-    testParam.payloadLen = payloadLen;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 10: fsk Deviation check and set */
-  if ((testParam.modulation == TEST_LORA) || (testParam.modulation == TEST_BPSK) || (testParam.modulation == TEST_MSK))
-  {
-    /* Not used */
-  }
-  else if ((testParam.modulation == TEST_FSK) && ((fskDeviation >= 600) && (fskDeviation <= 200000)))
-  {
-    /*given in MHz*/
-    testParam.fskDev = fskDeviation;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 11: low datarate optimization check and set */
-  if ((testParam.modulation == TEST_FSK) || (testParam.modulation == TEST_BPSK) || (testParam.modulation == TEST_MSK))
-  {
-    /* Not used */
-  }
-  else if ((testParam.modulation == TEST_LORA) && (lowDrOpt <= 2))
-  {
-    testParam.lowDrOpt = lowDrOpt;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /* 12: FSK gaussian BT product check and set */
-  if ((testParam.modulation == TEST_LORA) || (testParam.modulation == TEST_BPSK))
-  {
-    /* Not used */
-  }
-  else if (((testParam.modulation == TEST_FSK) || (testParam.modulation == TEST_MSK)) && (BTproduct <= 4))
-  {
-    /*given in MHz*/
-    testParam.BTproduct = BTproduct;
-  }
-  else
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  TST_set_config(&testParam);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_test_set_config_2 */
-
-  /* USER CODE END AT_test_set_config_2 */
-}
-
-ATEerror_t AT_test_tx(const char *param)
-{
-  /* USER CODE BEGIN AT_test_tx_1 */
-
-  /* USER CODE END AT_test_tx_1 */
-  const char *buf = param;
-  uint32_t nb_packet;
-
-  if (1 != tiny_sscanf(buf, "%u", &nb_packet))
-  {
-    AT_PRINTF("AT+TTX: nb packets sent is missing\r\n");
-    return AT_PARAM_ERROR;
-  }
-
-  if (0U == TST_TX_Start(nb_packet))
-  {
-    return AT_OK;
-  }
-  else
-  {
-    return AT_ERROR;
-  }
-  /* USER CODE BEGIN AT_test_tx_2 */
-
-  /* USER CODE END AT_test_tx_2 */
-}
-
-ATEerror_t AT_test_rx(const char *param)
-{
-  /* USER CODE BEGIN AT_test_rx_1 */
-
-  /* USER CODE END AT_test_rx_1 */
-  const char *buf = param;
-  uint32_t nb_packet;
-
-  if (1 != tiny_sscanf(buf, "%u", &nb_packet))
-  {
-    AT_PRINTF("AT+TRX: nb expected packets is missing\r\n");
-    return AT_PARAM_ERROR;
-  }
-
-  if (0U == TST_RX_Start(nb_packet))
-  {
-    return AT_OK;
-  }
-  else
-  {
-    return AT_ERROR;
-  }
-  /* USER CODE BEGIN AT_test_rx_2 */
-
-  /* USER CODE END AT_test_rx_2 */
-}
-
 ATEerror_t AT_test_tx_hopping(const char *param)
 {
   /* USER CODE BEGIN AT_test_tx_hopping_1 */
@@ -2113,73 +1200,33 @@ ATEerror_t AT_read_register(const char *param)
   /* USER CODE END AT_read_register_2 */
 }
 
-/* --------------- LoraWAN Certif command --------------- */
-ATEerror_t AT_Certif(const char *param)
-{
-  /* USER CODE BEGIN AT_Certif_1 */
-
-  /* USER CODE END AT_Certif_1 */
-  switch (param[0])
-  {
-    case '0':
-      LmHandlerJoin(ACTIVATION_TYPE_ABP, true);
-    case '1':
-      LmHandlerJoin(ACTIVATION_TYPE_OTAA, true);
-      break;
-    default:
-      return AT_PARAM_ERROR;
-  }
-
-  UTIL_TIMER_Create(&TxCertifTimer, 8000, UTIL_TIMER_ONESHOT, OnCertifTimer, NULL);  /* 8s */
-  UTIL_TIMER_Start(&TxCertifTimer);
-  UTIL_SEQ_RegTask((1 << CFG_SEQ_Task_LoRaCertifTx), UTIL_SEQ_RFU, CertifSend);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Certif_2 */
-
-  /* USER CODE END AT_Certif_2 */
-}
-
-/* --------------- Information command --------------- */
-ATEerror_t AT_bat_get(const char *param)
-{
-  /* USER CODE BEGIN AT_bat_get_1 */
-
-  /* USER CODE END AT_bat_get_1 */
-  print_d(SYS_GetBatteryLevel());
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_bat_get_2 */
-
-  /* USER CODE END AT_bat_get_2 */
-}
-
 /* USER CODE BEGIN EF */
 // INSET commands
+/* AT+WDT=ON|OFF -> +WDT: ON|OFF, a change resets the module (the IWDG is started at boot from EEPROM) */
 ATEerror_t AT_wdt_set(const char *param){
-	uint8_t wdt;
+	bool wdt;
+	bool changed;
+
 	if (strcasecmp(param, "ON") == 0){
-		wdt = 1U;
+		wdt = true;
 	}
 	else if (strcasecmp(param, "OFF") == 0){
-		wdt = 0U;
+		wdt = false;
 	}
 	else{
 		return AT_PARAM_ERROR;
 	}
 
-	uint8_t changed = (eeprom_vars.wdt != wdt);
+	changed = ((eeprom_vars.wdt != 0U) != wdt);
 
-	if (eeprom_set_wdt(wdt) != EE_OK){
+	if (dev_wdt_set(wdt) != LW_OK){
 		return AT_ERROR;
 	}
 	AT_PPRINTF("+WDT: %s\r\n", wdt ? "ON" : "OFF");
 
 	if (changed){
-		(void)lw_nvm_store(0U);     /* changed configuration must not be lost by the reset */
-		AT_flush_output();
-		NVIC_SystemReset();
-		}
+		dev_reset();      /* stores the changed configuration, sends the answer, resets */
+	}
 	return AT_OK;
 }
 
@@ -2189,17 +1236,22 @@ ATEerror_t AT_wdt_get(const char *param){
 	return AT_OK;
 }
 
+/* AT+LOG=QUIET|DEBUG -> +LOG: QUIET|DEBUG   (QUIET = VLEVEL_OFF, DEBUG = VLEVEL_H; other levels
+   only through dev_log_set()) */
 ATEerror_t AT_log_set(const char *param){
+	uint8_t level;
+
 	if (strcasecmp(param, "QUIET") == 0){
-		UTIL_ADV_TRACE_SetVerboseLevel(VLEVEL_OFF);
-		ram_vars.log_level = 0;
+		level = VLEVEL_OFF;
 	}
 	else if (strcasecmp(param, "DEBUG") == 0){
-		UTIL_ADV_TRACE_SetVerboseLevel(VLEVEL_H);
-		ram_vars.log_level = 1;
+		level = VLEVEL_H;
 	}
 	else{
 		return AT_PARAM_ERROR;
+	}
+	if (dev_log_set(level) != LW_OK){
+		return AT_ERROR;
 	}
 	AT_PPRINTF("+LOG: %s\r\n", ram_vars.log_level ? "DEBUG" : "QUIET");
 	APP_LOG(TS_OFF, VLEVEL_H, "LOG is debug\r\n");
@@ -2370,7 +1422,7 @@ ATEerror_t AT_power_set(const char *param){
 	bool force = false;
 	LoRaMacNvmData_t *nvm;
 	MibRequestConfirm_t mib;
-	LW_InitError_t ret;
+	LW_Status_t ret;
 
 	dbm = strtol(param, &end, 10);
 	if (end == param){
@@ -2420,7 +1472,7 @@ static ATEerror_t AT_lw_dc_set(const char *val){
 	else{
 		return AT_PARAM_ERROR;
 	}
-	/* Same function as AT_DutyCycle_set(): LoRaMacTestSetDutyCycleOn() -> Nvm.MacGroup2.DutyCycleOn.
+	/* lw_dc_set(): LoRaMacTestSetDutyCycleOn() -> Nvm.MacGroup2.DutyCycleOn.
 	   EEPROM: LmHandlerConfigure() overwrites the stack value with the region default */
 
 	if (lw_dc_set(on) != LW_OK){
@@ -2914,88 +1966,64 @@ ATEerror_t AT_id_set(const char *param){
 }
 
 /* AT+MSGHEX / AT+CMSGHEX uplink in progress: "MSGHEX" | "CMSGHEX", NULL = none.
-   Finished in AT_msghex_done() (OnTxData -> AT_event_confirm) */
+   Finished in AT_msghex_result() (OnTxData -> lw_tx_done() -> callback). An uplink sent by
+   lw_send() from other code leaves it NULL: no AT output for it */
 static const char *msghex_name = NULL;
-/* NbTrans (AT+REPT) replaced by AT+RETRY during a confirmed uplink, restored in AT_msghex_done().
-   NbTrans lives in the NVM context: a context stored with the RETRY value would lose REPT */
-static uint8_t msghex_rept;
+/* Parsed payload, copied by lw_send() */
+static uint8_t msghex_buf[LORAWAN_APP_DATA_BUFFER_MAX_SIZE];
 
 /* AT+MSGHEX="<hex>"  -> +MSGHEX: Start ... +MSGHEX: Done
    AT+CMSGHEX="<hex>" -> +CMSGHEX: Start, +CMSGHEX: Wait ACK ... [+CMSGHEX: ACK Received], +CMSGHEX: Done
    FPort = AT+PORT; repetitions: unconfirmed = NbTrans (AT+REPT), confirmed = AT+RETRY.
-   An immediate failure prints the Seeed error line without Done (the ESP driver takes Done as success). */
-static ATEerror_t AT_msghex_send(const char *param, LmHandlerMsgTypes_t type){
-	const char *name = (type == LORAMAC_HANDLER_CONFIRMED_MSG) ? "CMSGHEX" : "MSGHEX";
+   An immediate failure prints the Seeed error line without Done (the ESP driver takes Done as success).
+   "Start" is printed after lw_send(): the end (OnTxData) comes only from the LmHandlerProcess task,
+   after this handler returns, so the line order is kept. */
+static ATEerror_t AT_msghex_send(const char *param, bool confirmed){
+	const char *name = confirmed ? "CMSGHEX" : "MSGHEX";
 	int16_t size;
-	uint8_t nb;
-	LoRaMacTxInfo_t txInfo;
-	MibRequestConfirm_t mib;
-	LmHandlerErrorStatus_t status;
+	LW_Status_t ret;
 
-	if (ram_vars.mode != 0U){          /* TEST mode: LoRaMac stopped */
-		return AT_ERROR;
-	}
-	if ((msghex_name != NULL) || LoRaMacIsBusy()){
-		AT_PPRINTF("+%s: LoRaWAN modem is busy\r\n", name);
-		return AT_BUSY_ERROR;
-	}
-	size = AT_parse_hex(param, AppData.Buffer, LORAWAN_APP_DATA_BUFFER_MAX_SIZE);
+	size = AT_parse_hex(param, msghex_buf, LORAWAN_APP_DATA_BUFFER_MAX_SIZE);
 	if (size < 0){
 		return AT_PARAM_ERROR;
 	}
-	/* LmHandlerSend() would send an empty frame instead of a too long payload */
-	if (LoRaMacQueryTxPossible((uint8_t)size, &txInfo) != LORAMAC_STATUS_OK){
-		AT_PPRINTF("+%s: Length error %u\r\n", name, (unsigned)txInfo.MaxPossibleApplicationDataSize);
-		return AT_PARAM_ERROR;
-	}
-	AppData.BufferSize = (uint8_t)size;
-	AppData.Port = eeprom_vars.port;
 
-	if (type == LORAMAC_HANDLER_CONFIRMED_MSG){
-		/* RETRY -> NbTrans: <2 = 1 transmission, stack limit 15 */
-		nb = eeprom_vars.retry;
-		if (nb < 1U){
-			nb = 1U;
-		}
-		if (nb > 15U){
-			nb = 15U;
-		}
-		mib.Type = MIB_CHANNELS_NB_TRANS;
-		LoRaMacMibGetRequestConfirm(&mib);
-		msghex_rept = mib.Param.ChannelsNbTrans;
-		mib.Param.ChannelsNbTrans = nb;
-		LoRaMacMibSetRequestConfirm(&mib);
+	ret = lw_send(eeprom_vars.port, msghex_buf, (uint8_t)size, confirmed, eeprom_vars.retry);
+
+	/* Refused before sending: no Start */
+	switch (ret){
+	case LW_ERROR:                      /* TEST mode: LoRaMac stopped */
+		return AT_ERROR;
+	case LW_PARAM_ERROR:
+		return AT_PARAM_ERROR;
+	case LW_BUSY_ERROR:
+		AT_PPRINTF("+%s: LoRaWAN modem is busy\r\n", name);
+		return AT_BUSY_ERROR;
+	case LW_LENGTH_ERROR:
+		AT_PPRINTF("+%s: Length error %u\r\n", name, (unsigned)lw_send_max_size());
+		return AT_PARAM_ERROR;
+	default:
+		break;
 	}
 
 	AT_PPRINTF("+%s: Start\r\n", name);
-	msghex_name = name;
-	status = LmHandlerSend(&AppData, type, false);
-	if (status == LORAMAC_HANDLER_SUCCESS){
-		if (type == LORAMAC_HANDLER_CONFIRMED_MSG){
+	if (ret == LW_OK){
+		msghex_name = name;
+		if (confirmed){
 			AT_PPRINTF("+%s: Wait ACK\r\n", name);
 		}
 		return AT_OK;
 	}
 
-	/* Not sent: no OnTxData will come */
-	msghex_name = NULL;
-	if (type == LORAMAC_HANDLER_CONFIRMED_MSG){
-		mib.Type = MIB_CHANNELS_NB_TRANS;
-		mib.Param.ChannelsNbTrans = msghex_rept;
-		LoRaMacMibSetRequestConfirm(&mib);
-	}
-	switch (status){
-	case LORAMAC_HANDLER_DUTYCYCLE_RESTRICTED:
+	/* Not sent by LmHandlerSend(): no OnTxData will come */
+	switch (ret){
+	case LW_DUTYCYCLE:
 		AT_PPRINTF("+%s: No band in %ums\r\n", name, (unsigned)LmHandlerGetDutyCycleWaitTime());
 		break;
-	case LORAMAC_HANDLER_NO_NETWORK_JOINED:
+	case LW_NOT_JOINED:
 		AT_PPRINTF("+%s: Please join network first\r\n", name);
 		break;
-	case LORAMAC_HANDLER_BUSY_ERROR:
-		AT_PPRINTF("+%s: LoRaWAN modem is busy\r\n", name);
-		break;
-	default:
-		/* LmHandlerSend() maps LORAMAC_STATUS_NO_FREE_CHANNEL_FOUND (LBT, AT+LW=THLD) to LORAMAC_HANDLER_ERROR */
+	default:                            /* LW_NO_CHANNEL: LBT (AT+LW=THLD) or other send error */
 		AT_PPRINTF("+%s: No free channel\r\n", name);
 		break;
 	}
@@ -3003,66 +2031,60 @@ static ATEerror_t AT_msghex_send(const char *param, LmHandlerMsgTypes_t type){
 }
 
 ATEerror_t AT_msghex_set(const char *param){
-	return AT_msghex_send(param, LORAMAC_HANDLER_UNCONFIRMED_MSG);
+	return AT_msghex_send(param, false);
 }
 
 ATEerror_t AT_cmsghex_set(const char *param){
-	return AT_msghex_send(param, LORAMAC_HANDLER_CONFIRMED_MSG);
+	return AT_msghex_send(param, true);
 }
 
-/* Called from AT_event_confirm() (OnTxData) when the uplink, including all NbTrans repetitions, is finished */
-void AT_msghex_done(LmHandlerTxParams_t *params){
-	MibRequestConfirm_t mib;
+/* lw_tx_done() callback (registered in LoRaWAN_Init): the uplink, including all NbTrans repetitions,
+   is finished. Prints only for an uplink started by AT+MSGHEX / AT+CMSGHEX */
+void AT_msghex_result(LW_TxResult_t result, bool confirmed){
+	(void)confirmed;
 
-	if ((msghex_name == NULL) || (params->IsMcpsConfirm == 0U)){
+	if (msghex_name == NULL){
 		return;
 	}
-	if (params->MsgType == LORAMAC_HANDLER_CONFIRMED_MSG){
-		mib.Type = MIB_CHANNELS_NB_TRANS;
-		mib.Param.ChannelsNbTrans = msghex_rept;
-		LoRaMacMibSetRequestConfirm(&mib);
-		if (params->AckReceived != 0U){
-			AT_PPRINTF("+%s: ACK Received\r\n", msghex_name);
-		}
-		else{
-			/* all RETRY transmissions without ACK (McpsConfirm.Status = RX2 timeout/error):
-			   no Done, the ESP driver takes Done as success and would not retry */
-			AT_PPRINTF("+%s: No ACK\r\n", msghex_name);
-			msghex_name = NULL;
-			return;
-		}
-	}
-	else if (params->Status != LORAMAC_EVENT_INFO_STATUS_OK){
-		/* unconfirmed: TX timeout / error (an unconfirmed uplink without downlink keeps the status OK) */
+	switch (result){
+	case LW_TX_ACK:
+		AT_PPRINTF("+%s: ACK Received\r\n", msghex_name);
+		AT_PPRINTF("+%s: Done\r\n", msghex_name);
+		break;
+	case LW_TX_NO_ACK:
+		/* all RETRY transmissions without ACK: no Done, the ESP driver takes Done as success
+		   and would not retry */
+		AT_PPRINTF("+%s: No ACK\r\n", msghex_name);
+		break;
+	case LW_TX_ERROR:
 		AT_PPRINTF("+%s: ERROR\r\n", msghex_name);
-		msghex_name = NULL;
-		return;
+		break;
+	default:                            /* LW_TX_DONE */
+		AT_PPRINTF("+%s: Done\r\n", msghex_name);
+		break;
 	}
-	AT_PPRINTF("+%s: Done\r\n", msghex_name);
 	msghex_name = NULL;
 }
 
 /* AT+REPT=<1..15> -> +REPT: <n>
-   Transmissions of an unconfirmed uplink = NbTrans (MIB_CHANNELS_NB_TRANS, Nvm.MacGroup2.MacParams,
-   LoRaWAN NVM context). With ADR on, the server (LinkADRReq NbRep) and the ADR backoff may change it. */
+   Transmissions of an unconfirmed uplink = NbTrans (lw_rept_set) */
 ATEerror_t AT_rept_set(const char *param){
 	char *end;
 	unsigned long rept = strtoul(param, &end, 10);
-	MibRequestConfirm_t mib;
 
 	if ((end == param) || (*end != '\0') || (rept < 1UL) || (rept > 15UL)){
 		return AT_PARAM_ERROR;
 	}
-	/* During AT+CMSGHEX NbTrans holds AT+RETRY, AT_msghex_done() would overwrite the new value */
-	if ((msghex_name != NULL) || LoRaMacIsBusy()){
+	switch (lw_rept_set((uint8_t)rept)){
+	case LW_OK:
+		break;
+	case LW_BUSY_ERROR:                 /* MAC busy or AT+CMSGHEX in progress (NbTrans holds AT+RETRY) */
 		return AT_BUSY_ERROR;
-	}
-	mib.Type = MIB_CHANNELS_NB_TRANS;
-	mib.Param.ChannelsNbTrans = (uint8_t)rept;
-	if (LoRaMacMibSetRequestConfirm(&mib) != LORAMAC_STATUS_OK){
+	case LW_PARAM_ERROR:
+		return AT_PARAM_ERROR;
+	default:
 		return AT_ERROR;
 	}
-	nvm_dirty = 1U;      /* LoRaWAN NVM context changed: stored at AT+LW=NET,OFF / AT+NVM / AT+RESET */
 	AT_PPRINTF("+REPT: %u\r\n", (unsigned)rept);
 	return AT_OK;
 }
@@ -3088,8 +2110,9 @@ ATEerror_t AT_rtc_set(const char *param){
 	SysTime_t st;
 
 	if (strcasecmp(param, "UTCMS") == 0){
-		st = SysTimeGet();
-		SysTimeLocalTime(st.Seconds, &t);
+		if (dev_rtc_get_ms(&st, &t) != LW_OK){
+			return AT_ERROR;
+		}
 		AT_PPRINTF("+RTC: %04d-%02d-%02d %02d:%02d:%02d.%03d\r\n", t.tm_year + 1900, t.tm_mon + 1,
 				t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int)st.SubSeconds);
 		return AT_OK;
@@ -3106,20 +2129,12 @@ ATEerror_t AT_rtc_set(const char *param){
 		}
 		p = end + 1;
 	}
-	if ((*p != '\0') || (v[0] < 2000UL) || (v[0] > 2099UL) || (v[1] < 1UL) || (v[1] > 12UL) ||
-		(v[2] < 1UL) || (v[2] > 31UL) || (v[3] > 23UL) || (v[4] > 59UL) || (v[5] > 59UL)){
+	if (*p != '\0'){
 		return AT_PARAM_ERROR;
 	}
-
-	t.tm_year = (int)v[0] - 1900;
-	t.tm_mon = (int)v[1] - 1;
-	t.tm_mday = (int)v[2];
-	t.tm_hour = (int)v[3];
-	t.tm_min = (int)v[4];
-	t.tm_sec = (int)v[5];
-	st.Seconds = SysTimeMkTime(&t);
-	st.SubSeconds = 0;
-	SysTimeSet(st);
+	if (dev_rtc_set(v) != LW_OK){
+		return AT_ERROR;
+	}
 
 	/* echo of the parsed value: a read back could already be one second later */
 	AT_PPRINTF("+RTC: %04u-%02u-%02u %02u:%02u:%02u\r\n", (unsigned)v[0], (unsigned)v[1], (unsigned)v[2],
@@ -3130,9 +2145,7 @@ ATEerror_t AT_rtc_set(const char *param){
 /* AT+RTC? | AT+RTC -> +RTC: YYYY-MM-DD HH:MM:SS */
 ATEerror_t AT_rtc_get(const char *param){
 	struct tm t;
-	SysTime_t st = SysTimeGet();
-
-	SysTimeLocalTime(st.Seconds, &t);
+	dev_rtc_get(&t);
 	AT_PPRINTF("+RTC: %04d-%02d-%02d %02d:%02d:%02d\r\n", t.tm_year + 1900, t.tm_mon + 1,
 			t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
 	return AT_OK;
@@ -3305,19 +2318,19 @@ ATEerror_t AT_test_set(const char *param){
 
 ATEerror_t AT_lowpower_set(const char *param){
 	if (strcasecmp(param, "AUTOON") == 0){
-		ram_vars.lowpower_auto = 1;
+		dev_lowpower_auto_set(true);
 		AT_PPRINTF("+LOWPOWER: AUTOON\r\n");
 		return AT_OK;
 	}
 	else if (strcasecmp(param, "AUTOOFF") == 0){
-		ram_vars.lowpower_auto = 0;
+		dev_lowpower_auto_set(false);
 		AT_PPRINTF("+LOWPOWER: AUTOOFF\r\n");
 		return AT_OK;
 	}
 	return AT_PARAM_ERROR;
 }
 ATEerror_t AT_lowpower_run(const char *param){
-	ram_vars.lowpower_once = 1;
+	dev_lowpower_sleep();
 	AT_PPRINTF("+LOWPOWER: SLEEP\r\n");
 	return AT_OK;
 }
@@ -3340,12 +2353,15 @@ ATEerror_t AT_uart_set(const char *param){
 				val++;
 			}
 			v = strtoul(val, &end, 10);
-			if ((end == val) || (*end != '\0') ||
-				((v != 9600UL) && (v != 14400UL) && (v != 19200UL) && (v != 38400UL) &&
-				 (v != 57600UL) && (v != 76800UL) && (v != 115200UL) && (v != 230400UL))){
+			if ((end == val) || (*end != '\0')){
 				return AT_PARAM_ERROR;
 			}
-			if (eeprom_set_uart_baud((uint32_t)v) != EE_OK){
+			switch (dev_uart_baud_set((uint32_t)v)){     /* the list of the baud rates is checked there */
+			case LW_OK:
+				break;
+			case LW_PARAM_ERROR:
+				return AT_PARAM_ERROR;
+			default:
 				return AT_ERROR;
 			}
 		}
@@ -3362,7 +2378,7 @@ ATEerror_t AT_uart_set(const char *param){
 			if ((end == val) || (*end != '\0') || (v > 65535UL)){
 				return AT_PARAM_ERROR;
 			}
-			if (eeprom_set_uart_timeout((uint16_t)v) != EE_OK){
+			if (dev_uart_timeout_set((uint16_t)v) != LW_OK){
 				return AT_ERROR;
 			}
 		}
@@ -3452,34 +2468,6 @@ static void print_u(uint32_t value)
   /* USER CODE BEGIN print_u_2 */
 
   /* USER CODE END print_u_2 */
-}
-
-static void OnCertifTimer(void *context)
-{
-  /* USER CODE BEGIN OnCertifTimer_1 */
-
-  /* USER CODE END OnCertifTimer_1 */
-  UTIL_SEQ_SetTask((1 << CFG_SEQ_Task_LoRaCertifTx), CFG_SEQ_Prio_0);
-  /* USER CODE BEGIN OnCertifTimer_2 */
-
-  /* USER CODE END OnCertifTimer_2 */
-}
-
-static void CertifSend(void)
-{
-  /* USER CODE BEGIN CertifSend_1 */
-
-  /* USER CODE END CertifSend_1 */
-  AppData.Buffer[0] = 0x43;
-  AppData.BufferSize = 1;
-  AppData.Port = 99;
-
-  /* Restart Tx to prevent a previous Join Failed */
-  if (LmHandlerJoinStatus() != LORAMAC_HANDLER_SET)
-  {
-    UTIL_TIMER_Start(&TxCertifTimer);
-  }
-  LmHandlerSend(&AppData, LORAMAC_HANDLER_UNCONFIRMED_MSG, false);
 }
 
 static uint8_t Char2Nibble(char Char)

@@ -63,11 +63,6 @@ void Error_Handler(void);
 #define USART_BAUDRATE 115200
 #define LED1_Pin GPIO_PIN_5
 #define LED1_GPIO_Port GPIOB
-/* LoRa-E5 mini has a single user LED: TX/RX/join indications share LED1 */
-#define LED2_Pin LED1_Pin
-#define LED2_GPIO_Port LED1_GPIO_Port
-#define LED3_Pin LED1_Pin
-#define LED3_GPIO_Port LED1_GPIO_Port
 #define BUT1_Pin GPIO_PIN_13
 #define BUT1_GPIO_Port GPIOB
 #define RF_CTRL1_Pin GPIO_PIN_4

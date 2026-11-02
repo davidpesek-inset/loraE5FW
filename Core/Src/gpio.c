@@ -22,7 +22,7 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN 0 */
-
+#include "sys_conf.h"     /* DEBUGGING */
 /* USER CODE END 0 */
 
 /*----------------------------------------------------------------------------*/
@@ -48,14 +48,18 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-
   /*Configure GPIO pin : LED1_Pin */
-  GPIO_InitStruct.Pin = LED1_Pin;
+#if (DEBUGGING == 1)
+  /* Devkit LED (active low): on = MCU awake, off in Stop mode (stm32_lpm_if.c) */
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+#else
+  /* PB5 not connected on the target board: analog mode, input buffer off = lowest consumption */
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+#endif /* DEBUGGING */
+  GPIO_InitStruct.Pin = LED1_Pin;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(LED1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BUT1_Pin (not used by this application) */

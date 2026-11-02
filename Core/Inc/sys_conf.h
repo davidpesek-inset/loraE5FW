@@ -78,7 +78,11 @@ extern "C" {
 #define LOW_POWER_DISABLE                    0
 
 /* USER CODE BEGIN EC */
-
+/**
+  * @brief 1 = development on the devkit: the user LED (PB5, active low) is on while the MCU is awake
+  *        0 = target board: PB5 is not connected, it stays in analog mode (lowest consumption)
+  */
+#define DEBUGGING                            0
 /* USER CODE END EC */
 
 /* External variables --------------------------------------------------------*/

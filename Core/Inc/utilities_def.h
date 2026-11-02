@@ -78,7 +78,6 @@ typedef enum
   CFG_SEQ_Task_Vcom,
   CFG_SEQ_Task_LmHandlerProcess,
   CFG_SEQ_Task_LoRaStoreContextEvent,
-  CFG_SEQ_Task_LoRaCertifTx,
   /* USER CODE BEGIN CFG_SEQ_Task_Id_t */
   CFG_SEQ_Task_TstRxPrint,              /* AT+TEST=RXLRPKT: print of a received packet (test_rf.c) */
   CFG_SEQ_Task_TstRxOnce,

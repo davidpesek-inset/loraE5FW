@@ -913,7 +913,7 @@ int8_t RegionEU868AlternateDr( int8_t currentDr, AlternateDrType_t type )
 #define EU868_LBT_CARRIER_SENSE_TIME                6
 
 /* USER (Seeed AT+LW=THLD): LBT RSSI threshold [dBm], 0 = LBT off.
-   Weak default = LBT off (original behaviour); the application overrides it (lora_at.c). */
+   Weak default = LBT off (original behaviour); the application overrides it (LoRaWAN/App/lw_options.c). */
 __attribute__((weak)) int16_t RegionEU868LbtThreshold( void )
 {
     return 0;

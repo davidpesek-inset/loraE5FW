@@ -25,11 +25,9 @@
 #define EE_VA_RETRY             11U
 #define EE_VA_WDT				12U
 #define EE_VA_CT                13U
-#define EE_VA_MODE				14U
-/* 15..16 reserved */
+/* 14..16 reserved */
 #define EE_VA_USER_BASE         17U   /* AT+EEPROM user area, 4 bytes per variable */
 #define EE_VA_USER_WORDS        96U   /* 96 x 4 B = 384 B, VA 17..112 */
-#define EE_VA_USER_MIN			EE_VA_USER_BASE
 #define EE_VA_USER_MAX			(EE_VA_USER_BASE + EE_VA_USER_WORDS - 1)
 #define EE_INIT_MARK_VALUE      1U
 
@@ -60,26 +58,10 @@ typedef struct{
 typedef struct
 {
   uint8_t  mode;             /* AT+MODE      0 = LWABP, 1 = TEST */
-  uint8_t  log_level;        /* AT+LOG       0 = QUIET, 1 = DEBUG */
+  uint8_t  log_level;        /* trace verbose level VLEVEL_OFF..VLEVEL_H (dev_log_set); AT+LOG: QUIET = 0, DEBUG = VLEVEL_H */
   uint8_t  lowpower_auto;    /* AT+LOWPOWER  0 = AUTOOFF, 1 = AUTOON */
   volatile uint8_t lowpower_once;
-  uint8_t  adr;
-  uint8_t  class;
-  uint8_t  ct;
-  uint8_t  rx1_delay;
-  uint8_t  rx2_delay;
-  uint8_t  rx1_win;
-  uint8_t  rx2_win;
   LwChData_t ch_data[17];
-  uint32_t test_freq_hz;     /* AT+TEST=RFCFG */
-  uint8_t  test_sf;
-  uint16_t test_bw_khz;
-  uint16_t test_txpr;
-  uint16_t test_rxpr;
-  int8_t   test_pow_dbm;
-  uint8_t  test_crc;         /* 0 = OFF, 1 = ON */
-  uint8_t  test_iq;          /* 0 = OFF, 1 = ON */
-  uint8_t  test_net;         /* 0 = OFF, 1 = ON */
 } RamVars_t;
 
 extern EepromVars_t eeprom_vars;

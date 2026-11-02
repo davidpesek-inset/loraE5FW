@@ -38,6 +38,7 @@
 #include "main.h"
 #include "LoRaMac.h"
 #include "eeprom_wrapper.h"
+#include "lw_link.h"
 /* USER CODE END Includes */
 
 /* External variables ---------------------------------------------------------*/
@@ -51,14 +52,8 @@
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
-/**
-  * LEDs period value of the timer in ms
-  */
-#define LED_PERIOD_TIME 500
-
 /* USER CODE BEGIN PD */
-/* TEMP: 0 = no join/TX/RX LED blinking, the LED shows only the Stop mode (stm32_lpm_if.c) */
-#define LED_BLINK_ENABLED 0
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -164,24 +159,6 @@ static void OnSystemReset(void);
 
 /* USER CODE BEGIN PFP */
 
-/**
-  * @brief  LED Tx timer callback function
-  * @param  context ptr of LED context
-  */
-static void OnTxTimerLedEvent(void *context);
-
-/**
-  * @brief  LED Rx timer callback function
-  * @param  context ptr of LED context
-  */
-static void OnRxTimerLedEvent(void *context);
-
-/**
-  * @brief  LED Join timer callback function
-  * @param  context ptr of LED context
-  */
-static void OnJoinTimerLedEvent(void *context);
-
 /* USER CODE END PFP */
 
 /* Private variables ---------------------------------------------------------*/
@@ -225,21 +202,6 @@ static LmHandlerParams_t LmHandlerParams =
 };
 
 /* USER CODE BEGIN PV */
-/**
-  * @brief Timer to handle the application Tx Led to toggle
-  */
-static UTIL_TIMER_Object_t TxLedTimer;
-
-/**
-  * @brief Timer to handle the application Rx Led to toggle
-  */
-static UTIL_TIMER_Object_t RxLedTimer;
-
-/**
-  * @brief Timer to handle the application Join Led to toggle
-  */
-static UTIL_TIMER_Object_t JoinLedTimer;
-
 /**
   * Temp buffer to store a FLASH page in RAM when partial replacement is needed
   */
@@ -339,10 +301,6 @@ void LoRaWAN_Init(void)
           (uint8_t)(feature_version >> 8),
           (uint8_t)(feature_version));
 
-  UTIL_TIMER_Create(&TxLedTimer, LED_PERIOD_TIME, UTIL_TIMER_ONESHOT, OnTxTimerLedEvent, NULL);
-  UTIL_TIMER_Create(&RxLedTimer, LED_PERIOD_TIME, UTIL_TIMER_ONESHOT, OnRxTimerLedEvent, NULL);
-  UTIL_TIMER_Create(&JoinLedTimer, LED_PERIOD_TIME, UTIL_TIMER_PERIODIC, OnJoinTimerLedEvent, NULL);
-
   if (FLASH_IF_Init(FLASH_RAM_buffer) != FLASH_IF_OK)
   {
     Error_Handler();
@@ -363,6 +321,10 @@ void LoRaWAN_Init(void)
   LmHandlerConfigure(&LmHandlerParams);
 
   /* USER CODE BEGIN LoRaWAN_Init_Last */
+  /* AT layer: end of AT+MSGHEX/CMSGHEX and +EVT lines of the downlinks (lw_link.c dispatches) */
+  lw_set_tx_done_callback(AT_msghex_result);
+  lw_set_rx_callback(AT_event_receive);
+
   /* Boot: NET, DC and DR from EEPROM, then ABP activation (default mode LWABP), as after AT+MODE=LWABP.
      Without it AT+LW=NET returns ON after every reset and a module-only reset stops the uplinks */
   // LoRaWAN_ApplyEeprom();
@@ -372,9 +334,6 @@ void LoRaWAN_Init(void)
   //{
   //  LoRaWAN_StartAbp();
   //}
-#if LED_BLINK_ENABLED
-  UTIL_TIMER_Start(&JoinLedTimer);
-#endif /* LED_BLINK_ENABLED */
 
   /* Seeed emulation: no boot banner, an unsolicited line after AT+RESET / a reset breaks the ESP driver */
   //APP_PPRINTF("ATtention command interface\r\n");
@@ -397,48 +356,17 @@ static void OnRxData(LmHandlerAppData_t *appData, LmHandlerRxParams_t *params)
   /* USER CODE BEGIN OnRxData_1 */
   if ((appData != NULL) || (params != NULL))
   {
-#if LED_BLINK_ENABLED
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET); /* LED_BLUE */
-
-    UTIL_TIMER_Start(&RxLedTimer);
-#endif /* LED_BLINK_ENABLED */
-
-    AT_event_receive(appData, params);
+    lw_rx_done(appData, params);       /* -> lw_set_rx_callback() (AT_event_receive) */
   }
   /* USER CODE END OnRxData_1 */
 }
-
-/* USER CODE BEGIN PrFD_LedEvents */
-static void OnTxTimerLedEvent(void *context)
-{
-  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET); /* LED_GREEN */
-}
-
-static void OnRxTimerLedEvent(void *context)
-{
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET); /* LED_BLUE */
-}
-
-static void OnJoinTimerLedEvent(void *context)
-{
-  HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin); /* LED_RED */
-}
-
-/* USER CODE END PrFD_LedEvents */
 
 static void OnTxData(LmHandlerTxParams_t *params)
 {
   /* USER CODE BEGIN OnTxData_1 */
   if ((params != NULL))
   {
-    /* Process Tx event only if its a mcps response to prevent some internal events (mlme) */
-#if LED_BLINK_ENABLED
-    if (params->IsMcpsConfirm != 0)
-    {
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET); /* LED_GREEN */
-      UTIL_TIMER_Start(&TxLedTimer);
-    }
-#endif /* LED_BLINK_ENABLED */
+    lw_tx_done(params);                /* end of a lw_send() uplink -> lw_set_tx_done_callback() */
     AT_event_confirm(params);
   }
   /* USER CODE END OnTxData_1 */
@@ -449,14 +377,6 @@ static void OnJoinRequest(LmHandlerJoinParams_t *joinParams)
   /* USER CODE BEGIN OnJoinRequest_1 */
   if (joinParams != NULL)
   {
-    if (joinParams->Status == LORAMAC_HANDLER_SUCCESS)
-    {
-#if LED_BLINK_ENABLED
-      UTIL_TIMER_Stop(&JoinLedTimer);
-      HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET); /* LED_RED */
-#endif /* LED_BLINK_ENABLED */
-
-    }
     AT_event_join(joinParams);
   }
   /* USER CODE END OnJoinRequest_1 */

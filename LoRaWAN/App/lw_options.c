@@ -1,17 +1,17 @@
 /*
- * lorawan_hooks.c
+ * lw_options.c
  *
  *  Created on: 30. 10. 2026
  *      Author: pesek
  *
- *  Strong definitions of the weak hooks added to the LoRaWAN middleware
- *  (Libs/Middlewares/Third_Party/LoRaWAN). The stack calls them to read the AT settings
- *  stored in EEPROM; the weak defaults keep the original ST behaviour.
+ *  Seeed behaviour options (AT+LW=CT, DUMRX, THLD): setters (EEPROM) and the strong definitions
+ *  of the weak hooks added to the LoRaWAN middleware (Libs/Middlewares/Third_Party/LoRaWAN),
+ *  which read them. The weak defaults keep the original ST behaviour.
  *
  *  The file must be linked as an object file, not from a static library (.a): the linker
  *  does not pull an object from a library to replace a weak symbol, so the weak defaults
  *  would stay active without any warning. Check the .map file: all hooks must come from
- *  lorawan_hooks.o.
+ *  lw_options.o.
  */
 
 #include <stdbool.h>
@@ -19,6 +19,29 @@
 #include "eeprom_wrapper.h"
 #include "LoRaMac.h"
 #include "RegionEU868.h"
+
+#include "lw_options.h"
+
+LW_Status_t lw_ct_set(bool ct){
+	if (eeprom_set_ct(ct) != EE_OK){
+		return LW_ERROR;
+	}
+	return LW_OK;
+}
+
+LW_Status_t lw_dumrx_set(bool dumrx){
+	if (eeprom_set_dumrx((uint8_t)dumrx) != EE_OK){
+		return LW_ERROR;
+	}
+	return LW_OK;
+}
+
+LW_Status_t lw_thld_set(int16_t thld){
+	if (eeprom_set_thld(thld) != EE_OK){
+		return LW_ERROR;
+	}
+	return LW_OK;
+}
 
 /* AT+LW=THLD (weak in RegionEU868.c): LBT RSSI threshold [dBm], 0 = LBT off */
 int16_t RegionEU868LbtThreshold(void){
