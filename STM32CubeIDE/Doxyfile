@@ -1,0 +1,13 @@
+PROJECT_NAME           = "LoRa E5 FW"
+OUTPUT_DIRECTORY       = docs
+INPUT                  = LoRaWAN/App/lw_types.h \
+                         LoRaWAN/App/lw_core.h   LoRaWAN/App/lw_core.c \
+                         LoRaWAN/App/lw_config.h LoRaWAN/App/lw_config.c \
+                         LoRaWAN/App/lw_link.h   LoRaWAN/App/lw_link.c \
+                         LoRaWAN/App/lw_options.h LoRaWAN/App/lw_options.c \
+                         LoRaWAN/App/dev_system.h LoRaWAN/App/dev_system.c
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_STATIC         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+WARN_IF_UNDOCUMENTED   = YES
