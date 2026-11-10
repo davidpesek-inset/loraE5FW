@@ -1,4 +1,1 @@
-This branch focuses on making all used AT command functionality callable without the need to send AT commands from serial. This is a step towards using minimal amount of AT commands for E5 initialization/configuration and consequently saving time.
-
-
-
+This is the main branch. Current version of FW supports seeed-like AT commands plus self initalization feature of E5 (STM32) chip
