@@ -10,63 +10,6 @@
 
 _Static_assert((EE_VA_USER_BASE + EE_VA_USER_WORDS - 1U) <= NB_OF_VARIABLES, "VA must be 1..NB_OF_VARIABLES");
 
-// DEFAULT SETTINGS BELOW ARE THE SETTINGS, THAT ARE SET DURING INITIALIZATION OF STM/LORA
-#define EE_DEF_UART_BR          9600U
-#define EE_DEF_UART_TIMEOUT     1000U
-#define EE_DEF_DR               2U
-#define EE_DEF_DC               0U
-#define EE_DEF_NET              0U
-#define EE_DEF_LDRO             0U
-#define EE_DEF_THLD             (-65)
-#define EE_DEF_DUMRX            1U
-#define EE_DEF_PORT             8U
-#define EE_DEF_RETRY            1U
-#define EE_DEF_WDT				1U
-#define EE_DEF_CT               0U
-#define EE_DEF_INIT_PHASE       1U
-
-EepromVars_t eeprom_vars =
-{
-  .uart_baud       = EE_DEF_UART_BR,
-  .uart_timeout_ms = EE_DEF_UART_TIMEOUT,
-  .dr              = EE_DEF_DR,
-  .dc              = EE_DEF_DC,
-  .net             = EE_DEF_NET,
-  .ldro            = EE_DEF_LDRO,
-  .thld_dbm        = EE_DEF_THLD,
-  .dumrx           = EE_DEF_DUMRX,
-  .port            = EE_DEF_PORT,
-  .retry           = EE_DEF_RETRY,
-  .wdt			   = EE_DEF_WDT,
-  .ct              = EE_DEF_CT,
-  .init_phase	   = EE_DEF_INIT_PHASE
-};
-
-RamVars_t ram_vars =
-{
-  .lowpower_auto = 1U,              /* AUTOON */
-  .lowpower_once = 0U,
-  .ch_data		 = {
-		  [0] = { 863800000U, 0U, 5U },
-		  [1] = { 864000000U, 0U, 5U },
-		  [2] = { 864200000U, 0U, 5U },
-		  [3] = { 864400000U, 0U, 5U },
-		  [4] = { 864600000U, 0U, 5U },
-		  [5] = { 864800000U, 0U, 5U },
-		  [6] = { 865000000U, 0U, 5U },
-		  [7] = { 865200000U, 0U, 5U },
-  },
-  .appskey		 = "2B:7E:15:16:28:AE:D2:A6:AB:F7:15:88:09:CF:4F:3C",
-  .nwkskey		 = "2B:7E:15:16:28:AE:D2:A6:AB:F7:15:88:09:CF:4F:3C",
-  .devaddr		 = "00:18:1F:F1",
-  .adr			 = false,			// no ADR
-  .class		 = CLASS_A,
-  .power		 = 18,
-  .rx1Delay		 = 1000,
-  .rx2Delay		 = 10000,
-  .rept			 = 1,
-};
-
 /* Writes one variable only when the stored value differs.
    EE_CleanUp() erases flash pages (CPU stalls): do not call during a LoRaWAN TX/RX window. */
 EE_Status ee_write(uint16_t va, uint32_t data)
@@ -98,54 +41,80 @@ EE_Status ee_write(uint16_t va, uint32_t data)
 EE_Status eeprom_vars_init(void)
 {
   uint32_t v;
-  /* First boot: no marker yet, store the defaults from eeprom_vars */
-  if (EE_ReadVariable32bits(EE_VA_INIT_PHASE, &v) == EE_NO_DATA)
+  EepromVars_t *ee = &eeprom_vars;
+
+  /* Nothing is written here: the EEPROM is written only by AT+PROFILE and the AT setters */
+  dev_state.init_phase = INIT_PHASE_NONE;
+  dev_state.profile_id = PROFILE_NONE;
+  if ((EE_ReadVariable32bits(EE_VA_PROFILE_ID, &v) == EE_OK) && (v < PROFILE_COUNT))
   {
-    DEBUG_PRINTF("EEPROM empty, writing defaults\r\n");
-    return eeprom_vars_write_all();
+    dev_state.profile_id = (uint8_t)v;
   }
-  DEBUG_PRINTF("Reading EEPROM variables, init_phase %u\r\n", (unsigned int)v);
-  eeprom_vars.init_phase = v;
-  /* A variable that is not found keeps its default value */
-  if (EE_ReadVariable32bits(EE_VA_UART_BR, &v) == EE_OK)      { eeprom_vars.uart_baud       = v; }
-  if (EE_ReadVariable32bits(EE_VA_UART_TIMEOUT, &v) == EE_OK) { eeprom_vars.uart_timeout_ms = (uint16_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_DR, &v) == EE_OK)           { eeprom_vars.dr              = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_DC, &v) == EE_OK)           { eeprom_vars.dc              = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_NET, &v) == EE_OK)          { eeprom_vars.net             = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_LDRO, &v) == EE_OK)         { eeprom_vars.ldro            = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_THLD, &v) == EE_OK)         { eeprom_vars.thld_dbm        = (int16_t)(uint16_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_DUMRX, &v) == EE_OK)        { eeprom_vars.dumrx           = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_PORT, &v) == EE_OK)         { eeprom_vars.port            = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_RETRY, &v) == EE_OK)        { eeprom_vars.retry           = (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_WDT, &v) == EE_OK)		  { eeprom_vars.wdt           	= (uint8_t)v; }
-  if (EE_ReadVariable32bits(EE_VA_CT, &v) == EE_OK)           { eeprom_vars.ct              = (uint8_t)v; }
+  /* No valid profile ID (EEPROM empty, older firmware) = not configured, whatever init_phase says */
+  if ((dev_state.profile_id != PROFILE_NONE) && (EE_ReadVariable32bits(EE_VA_INIT_PHASE, &v) == EE_OK))
+  {
+    dev_state.init_phase = (uint8_t)v;
+  }
+
+  /* RAM start values: EEPROM part of the stored profile, or of the default profile (not written to EEPROM) */
+  eeprom_vars = profiles[(dev_state.profile_id != PROFILE_NONE) ? dev_state.profile_id : PROFILE_DEFAULT].ee;
+
+  DEBUG_PRINTF("Reading EEPROM variables, init_phase %u\r\n", (unsigned int)dev_state.init_phase);
+  /* A variable that is not found keeps the profile value. Also read when not configured:
+     variables set by AT before AT+PROFILE */
+  if (EE_ReadVariable32bits(EE_VA_UART_BR, &v) == EE_OK)      { ee->uart_baud       = v; }
+  if (EE_ReadVariable32bits(EE_VA_UART_TIMEOUT, &v) == EE_OK) { ee->uart_timeout_ms = (uint16_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_DR, &v) == EE_OK)           { ee->dr              = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_DC, &v) == EE_OK)           { ee->dc              = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_NET, &v) == EE_OK)          { ee->net             = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_LDRO, &v) == EE_OK)         { ee->ldro            = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_THLD, &v) == EE_OK)         { ee->thld_dbm        = (int16_t)(uint16_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_DUMRX, &v) == EE_OK)        { ee->dumrx           = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_PORT, &v) == EE_OK)         { ee->port            = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_RETRY, &v) == EE_OK)        { ee->retry           = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_WDT, &v) == EE_OK)          { ee->wdt             = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_CT, &v) == EE_OK)           { ee->ct              = (uint8_t)v; }
+  if (EE_ReadVariable32bits(EE_VA_LOWPOWER, &v) == EE_OK)     { ee->lowpower_auto   = (uint8_t)v; }
   return EE_OK;
 }
 
-EE_Status eeprom_vars_write_all(void)
+EE_Status eeprom_profile_write(uint8_t id)
 {
-  uint32_t status = EE_OK;     /* OR of all results: non-zero = at least one write failed */
+  uint32_t status;             /* OR of all results: non-zero = at least one write failed */
+  const EepromVars_t *ee;
 
-  status |= ee_write(EE_VA_UART_BR,      eeprom_vars.uart_baud);
-  status |= ee_write(EE_VA_UART_TIMEOUT, eeprom_vars.uart_timeout_ms);
-  status |= ee_write(EE_VA_DR,           eeprom_vars.dr);
-  status |= ee_write(EE_VA_DC,           eeprom_vars.dc);
-  status |= ee_write(EE_VA_NET,          eeprom_vars.net);
-  status |= ee_write(EE_VA_LDRO,         eeprom_vars.ldro);
-  status |= ee_write(EE_VA_THLD,         (uint16_t)eeprom_vars.thld_dbm);
-  status |= ee_write(EE_VA_DUMRX,        eeprom_vars.dumrx);
-  status |= ee_write(EE_VA_PORT,         eeprom_vars.port);
-  status |= ee_write(EE_VA_RETRY,        eeprom_vars.retry);
-  status |= ee_write(EE_VA_WDT,			 eeprom_vars.wdt);
-  status |= ee_write(EE_VA_CT,           eeprom_vars.ct);
-
-  /* Marker last and only on success: an interrupted run is repeated at the next boot */
-  if (status != EE_OK)
+  if (id >= PROFILE_COUNT)
   {
-    DEBUG_PRINTF("EEPROM defaults not written, init_phase not set\r\n");
     return EE_WRITE_ERROR;
   }
-  return ee_write(EE_VA_INIT_PHASE, EE_DEF_INIT_PHASE);
+  ee = &profiles[id].ee;
+
+  /* Not configured first, INIT_PHASE_FIRST last: an interrupted write leaves the module
+     not configured, the host repeats AT+PROFILE */
+  status = eeprom_set_init_phase(INIT_PHASE_NONE);
+  eeprom_vars = profiles[id].ee;
+
+  status |= ee_write(EE_VA_UART_BR,      ee->uart_baud);
+  status |= ee_write(EE_VA_UART_TIMEOUT, ee->uart_timeout_ms);
+  status |= ee_write(EE_VA_DR,           ee->dr);
+  status |= ee_write(EE_VA_DC,           ee->dc);
+  status |= ee_write(EE_VA_NET,          ee->net);
+  status |= ee_write(EE_VA_LDRO,         ee->ldro);
+  status |= ee_write(EE_VA_THLD,         (uint16_t)ee->thld_dbm);
+  status |= ee_write(EE_VA_DUMRX,        ee->dumrx);
+  status |= ee_write(EE_VA_PORT,         ee->port);
+  status |= ee_write(EE_VA_RETRY,        ee->retry);
+  status |= ee_write(EE_VA_WDT,          ee->wdt);
+  status |= ee_write(EE_VA_CT,           ee->ct);
+  status |= ee_write(EE_VA_LOWPOWER,     ee->lowpower_auto);
+  status |= eeprom_set_profile_id(id);
+
+  if (status != EE_OK)
+  {
+    DEBUG_PRINTF("Profile %u not written to EEPROM, init_phase not set\r\n", (unsigned int)id);
+    return EE_WRITE_ERROR;
+  }
+  return eeprom_set_init_phase(INIT_PHASE_FIRST);
 }
 
 EE_Status eeprom_set_uart_baud(uint32_t value)
@@ -220,9 +189,20 @@ EE_Status eeprom_set_ct(uint8_t value)
   return ee_write(EE_VA_CT, value);
 }
 
-EE_Status eeprom_set_init_phase(uint8_t value)
+EE_Status eeprom_set_lowpower(uint8_t value)
 {
-  eeprom_vars.init_phase = value;
-  return ee_write(EE_VA_INIT_PHASE, value);
+  eeprom_vars.lowpower_auto = value;
+  return ee_write(EE_VA_LOWPOWER, value);
 }
 
+EE_Status eeprom_set_profile_id(uint8_t value)
+{
+  dev_state.profile_id = value;
+  return ee_write(EE_VA_PROFILE_ID, value);
+}
+
+EE_Status eeprom_set_init_phase(uint8_t value)
+{
+  dev_state.init_phase = value;
+  return ee_write(EE_VA_INIT_PHASE, value);
+}

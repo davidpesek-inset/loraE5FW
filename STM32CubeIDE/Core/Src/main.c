@@ -21,22 +21,14 @@
 #include "app_lorawan.h"
 #include "gpio.h"
 #include "iwdg.h"
-#include "eeprom_emul.h"
-#include "eeprom_wrapper.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "sys_conf.h"
-#include "stm32_seq.h"
-#include "stm32_timer.h"
-#include "utilities_def.h"
-#include "lw_core.h"
-#include "lw_config.h"
-#include "lw_link.h"
-#include "lw_options.h"
-#include "dev_system.h"
-#include "lora_app.h"
-#include "LoRaMac.h"
+#include "eeprom_emul.h"
+#include "eeprom_wrapper.h"
+#include "sys_conf.h"            /* DEBUGGING */
+#include "dev_system.h"          /* dev_log_set */
+#include "auto_init.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,8 +54,7 @@ uint8_t nvm_dirty = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-static void init_pre_join();
-static void init_post_join();
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -94,31 +85,29 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-
+  /* EEPROM before MX_LoRaWAN_Init(): the UART baud rate comes from eeprom_vars */
   HAL_FLASH_Unlock();
   if (EE_Init(EE_FORCED_ERASE) != EE_OK)
   {
     Error_Handler();
   }
-  eeprom_vars_init();
   HAL_FLASH_Lock();
+  eeprom_vars_init();
+  /* USER CODE END SysInit */
 
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
   MX_LoRaWAN_Init();	/* UART, trace, RTC, UTIL_TIMER */
+  /* USER CODE BEGIN 2 */
   if (DEBUGGING == 1){
 	  dev_log_set(VLEVEL_H);
   }
   if (eeprom_vars.wdt == 1U)
     {
-      MX_IWDG_Init();                  // potřebuje UTIL_TIMER a RTC
+      MX_IWDG_Init();                  /* needs UTIL_TIMER and RTC */
     }
-  init_pre_join();
-  LoRaWAN_StartAbp();
-  init_post_join();
+  auto_init_run();
+  /* USER CODE END 2 */
 
   while (1)
   {
@@ -177,107 +166,7 @@ void SystemClock_Config(void)
   }
 }
 
-static void init_pre_join(){
-	uint32_t init_phase = 0;
-	if (EE_ReadVariable32bits(EE_VA_INIT_PHASE, &init_phase) != EE_OK){
-		return;
-	}
-	if (init_phase == 2){
-		DEBUG_PRINTF("Modem already initialized, skipping configuration\r\n");
-		return;
-	}
-	if (init_phase != 1){
-		DEBUG_PRINTF("Initialization error - wrong state\r\n");
-		return;
-	}
-
-	if (lw_region_set(LORAMAC_REGION_EU868) != LW_OK){
-		return;
-	}
-
-	if (lw_appskey_set(ram_vars.appskey) != LW_OK){
-			return;
-		}
-
-	if (lw_nwkskey_set(ram_vars.nwkskey) != LW_OK){
-		return;
-	}
-
-	if (lw_devaddr_set(ram_vars.devaddr) != LW_OK){
-		return;
-	}
-
-}
-
-static void init_post_join(){
-	uint32_t init_phase = 0;
-	uint8_t num_ch = 0;
-	if (EE_ReadVariable32bits(EE_VA_INIT_PHASE, &init_phase) != EE_OK){
-		return;
-	}
-	// wait for ABP join finish
-	while (LoRaMacIsBusy()) { MX_LoRaWAN_Process(); }
-	// all config, that saves to NVM - set once on first boot
-	if (init_phase == 1){
-		num_ch = sizeof(ram_vars.ch_data)/sizeof(ram_vars.ch_data[0]);
-		for (size_t i = 0; i < num_ch; i++){
-			if (lw_ch_set(i, ram_vars.ch_data[i].drmin, ram_vars.ch_data[i].drmax, ram_vars.ch_data[i].freq) != LW_OK){
-				return;
-			}
-		}
-		if (lw_class_set(ram_vars.class) != LW_OK){
-			return;
-		}
-		if (lw_adr_set(ram_vars.adr) != LW_OK){
-			return;
-		}
-		if (lw_power_set(ram_vars.power, true) != LW_OK){
-			return;
-		}
-		if (lw_rx1Delay_set(ram_vars.rx1Delay) != LW_OK){
-			return;
-		}
-		if (lw_rx2Delay_set(ram_vars.rx2Delay) != LW_OK){
-			return;
-		}
-		if (lw_rept_set(ram_vars.rept) != LW_OK){
-			return;
-		}
-		if (lw_nvm_store(0U) != LW_OK){
-			return;
-		}
-		eeprom_set_init_phase(2);
-	}
-
-	if (lw_dr_set(eeprom_vars.dr) != LW_OK){
-		return;
-	}
-	if (lw_dc_set(eeprom_vars.dc) != LW_OK){
-		return;
-	}
-	if (lw_net_set(eeprom_vars.net) != LW_OK){
-		return;
-	}
-	//if (lw_ldro_set(eeprom_vars.ldro) != LW_OK){
-	//		return;
-	//}
-	if (lw_thld_set(eeprom_vars.thld_dbm) != LW_OK){
-		return;
-	}
-	//if (lw_dumrx_set(eeprom_vars.dumrx) != LW_OK){
-	//		return;
-	//}
-	if (lw_ct_set(eeprom_vars.ct) != LW_OK){
-		return;
-	}
-
-	if (lw_port_set(eeprom_vars.port) != LW_OK){
-		return;
-	}
-	if (lw_retry_set(eeprom_vars.retry) != LW_OK){
-		return;
-	}
-}
+/* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
 

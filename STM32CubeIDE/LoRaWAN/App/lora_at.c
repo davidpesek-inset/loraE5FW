@@ -50,6 +50,7 @@
 #include "lw_link.h"
 #include "lw_options.h"
 #include "dev_system.h"
+#include "auto_init.h"
 /* USER CODE END Includes */
 
 /* External variables ---------------------------------------------------------*/
@@ -104,12 +105,6 @@ static bool ClassBEnableRequest = false;
 static int32_t sscanf_16_hhx(const char *from, uint8_t *pt);
 
 /**
-  * @brief  Print 4 bytes as %02x
-  * @param  value containing the 4 bytes to print
-  */
-static void print_uint32_as_02x(uint32_t value);
-
-/**
   * @brief  Print 16 bytes as %02X
   * @param  pt pointer containing the 16 bytes to print
   */
@@ -133,36 +128,10 @@ static void print_d(int32_t value);
   */
 static void print_u(uint32_t value);
 
-/**
-  * @brief  Check if character in parameter is alphanumeric
-  * @param  Char for the alphanumeric check
-  */
-static int32_t isHex(char Char);
-
-/**
-  * @brief  Converts hex string to a nibble ( 0x0X )
-  * @param  Char hex string
-  * @retval the nibble. Returns 0xF0 in case input was not an hex string (a..f; A..F or 0..9)
-  */
-static uint8_t Char2Nibble(char Char);
-
-/**
-  * @brief  Convert a string into a buffer of data
-  * @param  str string to convert
-  * @param  data output buffer
-  * @param  Size of input string
-  */
-static int32_t stringToData(const char *str, uint8_t *data, uint32_t Size);
-
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
 
 /* Exported functions --------------------------------------------------------*/
-ATEerror_t AT_return_ok(const char *param)
-{
-  return AT_OK;
-}
-
 ATEerror_t AT_return_error(const char *param)
 {
   return AT_ERROR;
@@ -477,96 +446,6 @@ ATEerror_t AT_AppKey_set(const char *param)
   /* USER CODE END AT_AppKey_set_2 */
 }
 
-ATEerror_t AT_NwkSKey_get(const char *param)
-{
-  /* USER CODE BEGIN AT_NwkSKey_get_1 */
-
-  /* USER CODE END AT_NwkSKey_get_1 */
-  uint8_t nwkSKey[16];
-  if (LORAMAC_HANDLER_SUCCESS != LmHandlerGetKey(NWK_S_KEY, nwkSKey))
-  {
-    return AT_ERROR;
-  }
-  print_16_02x(nwkSKey);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_NwkSKey_get_2 */
-
-  /* USER CODE END AT_NwkSKey_get_2 */
-}
-
-ATEerror_t AT_NwkSKey_set(const char *param)
-{
-  /* USER CODE BEGIN AT_NwkSKey_set_1 */
-
-  /* USER CODE END AT_NwkSKey_set_1 */
-	if (lw_nwkskey_set(param) != LW_OK){
-		return AT_ERROR;
-	}
-	return AT_OK;
-  /* USER CODE BEGIN AT_NwkSKey_set_2 */
-
-  /* USER CODE END AT_NwkSKey_set_2 */
-}
-
-ATEerror_t AT_AppSKey_get(const char *param)
-{
-  /* USER CODE BEGIN AT_AppSKey_get_1 */
-
-  /* USER CODE END AT_AppSKey_get_1 */
-  uint8_t appSKey[16];
-  if (LORAMAC_HANDLER_SUCCESS != LmHandlerGetKey(APP_S_KEY, appSKey))
-  {
-    return AT_ERROR;
-  }
-  print_16_02x(appSKey);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_AppSKey_get_2 */
-
-  /* USER CODE END AT_AppSKey_get_2 */
-}
-
-ATEerror_t AT_AppSKey_set(const char *param)
-{
-  /* USER CODE BEGIN AT_AppSKey_set_1 */
-
-  /* USER CODE END AT_AppSKey_set_1 */
-	if (lw_appskey_set(param) != LW_OK){
-		return AT_ERROR;
-	}
-	return AT_OK;
-  /* USER CODE BEGIN AT_AppSKey_set_2 */
-
-  /* USER CODE END AT_AppSKey_set_2 */
-}
-
-ATEerror_t AT_DevAddr_get(const char *param)
-{
-  /* USER CODE BEGIN AT_DevAddr_get_1 */
-
-  /* USER CODE END AT_DevAddr_get_1 */
-  uint32_t devAddr;
-  if (LmHandlerGetDevAddr(&devAddr) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_uint32_as_02x(devAddr);
-  return AT_OK;
-  /* USER CODE BEGIN AT_DevAddr_get_2 */
-
-  /* USER CODE END AT_DevAddr_get_2 */
-}
-
-ATEerror_t AT_DevAddr_set(const char *param)
-{
-	if (lw_devaddr_set(param) != LW_OK){
-		return AT_ERROR;
-	}
-	return AT_OK;
-}
-
 ATEerror_t AT_DevEUI_get(const char *param)
 {
   /* USER CODE BEGIN AT_DevEUI_get_1 */
@@ -607,64 +486,6 @@ ATEerror_t AT_DevEUI_set(const char *param)
   /* USER CODE BEGIN AT_DevEUI_set_2 */
 
   /* USER CODE END AT_DevEUI_set_2 */
-}
-
-ATEerror_t AT_NetworkID_get(const char *param)
-{
-  /* USER CODE BEGIN AT_NetworkID_get_1 */
-
-  /* USER CODE END AT_NetworkID_get_1 */
-  uint32_t networkId;
-  if (LmHandlerGetNetworkID(&networkId) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_d(networkId);
-  return AT_OK;
-  /* USER CODE BEGIN AT_NetworkID_get_2 */
-
-  /* USER CODE END AT_NetworkID_get_2 */
-}
-
-ATEerror_t AT_NetworkID_set(const char *param)
-{
-  /* USER CODE BEGIN AT_NetworkID_set_1 */
-
-  /* USER CODE END AT_NetworkID_set_1 */
-  uint32_t networkId;
-  if (tiny_sscanf(param, "%u", &networkId) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (networkId > 127)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  LmHandlerSetNetworkID(networkId);
-  return AT_OK;
-  /* USER CODE BEGIN AT_NetworkID_set_2 */
-
-  /* USER CODE END AT_NetworkID_set_2 */
-}
-
-/* --------------- LoRaWAN join and send data commands --------------- */
-ATEerror_t AT_Link_Check(const char *param)
-{
-  /* USER CODE BEGIN AT_Link_Check_1 */
-
-  /* USER CODE END AT_Link_Check_1 */
-  if (LmHandlerLinkCheckReq() != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Link_Check_2 */
-
-  /* USER CODE END AT_Link_Check_2 */
 }
 
 /* --------------- LoRaWAN network management commands --------------- */
@@ -933,273 +754,6 @@ ATEerror_t AT_JoinAcceptDelay2_set(const char *param)
   /* USER CODE END AT_JoinAcceptDelay2_set_2 */
 }
 
-ATEerror_t AT_Rx2DataRate_get(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx2DataRate_get_1 */
-
-  /* USER CODE END AT_Rx2DataRate_get_1 */
-  RxChannelParams_t rx2Params;
-  LmHandlerGetRX2Params(&rx2Params);
-  print_d(rx2Params.Datarate);
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx2DataRate_get_2 */
-
-  /* USER CODE END AT_Rx2DataRate_get_2 */
-}
-
-ATEerror_t AT_Rx2DataRate_set(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx2DataRate_set_1 */
-
-  /* USER CODE END AT_Rx2DataRate_set_1 */
-  RxChannelParams_t rx2Params;
-
-  /* Get the current configuration of RX2 */
-  LmHandlerGetRX2Params(&rx2Params);
-
-  /* Update the Datarate with scanf */
-  if (tiny_sscanf(param, "%hhu", &(rx2Params.Datarate)) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (rx2Params.Datarate > 15)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (LmHandlerSetRX2Params(&rx2Params) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx2DataRate_set_2 */
-
-  /* USER CODE END AT_Rx2DataRate_set_2 */
-}
-
-ATEerror_t AT_Rx2Frequency_get(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx2Frequency_get_1 */
-
-  /* USER CODE END AT_Rx2Frequency_get_1 */
-  RxChannelParams_t rx2Params;
-  LmHandlerGetRX2Params(&rx2Params);
-  print_d(rx2Params.Frequency);
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx2Frequency_get_2 */
-
-  /* USER CODE END AT_Rx2Frequency_get_2 */
-}
-
-ATEerror_t AT_Rx2Frequency_set(const char *param)
-{
-  /* USER CODE BEGIN AT_Rx2Frequency_set_1 */
-
-  /* USER CODE END AT_Rx2Frequency_set_1 */
-  RxChannelParams_t rx2Params;
-
-  /* Get the current configuration of RX2 */
-  LmHandlerGetRX2Params(&rx2Params);
-
-  /* Update the frequency with scanf */
-  if (tiny_sscanf(param, "%lu", &(rx2Params.Frequency)) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (LmHandlerSetRX2Params(&rx2Params) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_Rx2Frequency_set_2 */
-
-  /* USER CODE END AT_Rx2Frequency_set_2 */
-}
-
-ATEerror_t AT_PingSlot_get(const char *param)
-{
-  /* USER CODE BEGIN AT_PingSlot_get_1 */
-
-  /* USER CODE END AT_PingSlot_get_1 */
-  uint8_t periodicity;
-
-  if (LmHandlerGetPingPeriodicity(&periodicity) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  print_d(periodicity);
-  return AT_OK;
-  /* USER CODE BEGIN AT_PingSlot_get_2 */
-
-  /* USER CODE END AT_PingSlot_get_2 */
-}
-
-ATEerror_t AT_PingSlot_set(const char *param)
-{
-  /* USER CODE BEGIN AT_PingSlot_set_1 */
-
-  /* USER CODE END AT_PingSlot_set_1 */
-  uint8_t periodicity;
-
-  if (tiny_sscanf(param, "%hhu", &periodicity) != 1)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (periodicity > 7)
-  {
-    return AT_PARAM_ERROR;
-  }
-  else if (LmHandlerSetPingPeriodicity(periodicity) != LORAMAC_HANDLER_SUCCESS)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_PingSlot_set_2 */
-
-  /* USER CODE END AT_PingSlot_set_2 */
-}
-
-/* --------------- Radio tests commands --------------- */
-ATEerror_t AT_test_tx_hopping(const char *param)
-{
-  /* USER CODE BEGIN AT_test_tx_hopping_1 */
-
-  /* USER CODE END AT_test_tx_hopping_1 */
-  const char *buf = param;
-  uint32_t freq_start;
-  uint32_t freq_stop;
-  uint32_t delta_f;
-  uint32_t nb_tx;
-
-  testParameter_t test_param;
-  uint32_t hop_freq;
-
-  if (4 != tiny_sscanf(buf, "%u,%u,%u,%u", &freq_start, &freq_stop, &delta_f, &nb_tx))
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  /*if freq is set in MHz, convert to Hz*/
-  if (freq_start < 1000)
-  {
-    freq_start *= 1000000;
-  }
-  if (freq_stop < 1000)
-  {
-    freq_stop *= 1000000;
-  }
-  /**/
-  hop_freq = freq_start;
-
-  for (int32_t i = 0; i < nb_tx; i++)
-  {
-    /*get current config*/
-    TST_get_config(&test_param);
-
-    /*increment frequency*/
-    test_param.freq = hop_freq;
-    /*Set new config*/
-    TST_set_config(&test_param);
-
-    APP_TPRINTF("Tx Hop at %dHz. %d of %d\r\n", hop_freq, i, nb_tx);
-
-    if (0U != TST_TX_Start(1))
-    {
-      return AT_BUSY_ERROR;
-    }
-
-    hop_freq += delta_f;
-
-    if (hop_freq > freq_stop)
-    {
-      hop_freq = freq_start;
-    }
-  }
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_test_tx_hopping_2 */
-
-  /* USER CODE END AT_test_tx_hopping_2 */
-}
-
-ATEerror_t AT_test_stop(const char *param)
-{
-  /* USER CODE BEGIN AT_test_stop_1 */
-
-  /* USER CODE END AT_test_stop_1 */
-  TST_stop();
-  AT_PRINTF("Test Stop\r\n");
-  return AT_OK;
-  /* USER CODE BEGIN AT_test_stop_2 */
-
-  /* USER CODE END AT_test_stop_2 */
-}
-
-/* --------------- Radio access commands --------------- */
-ATEerror_t AT_write_register(const char *param)
-{
-  /* USER CODE BEGIN AT_write_register_1 */
-
-  /* USER CODE END AT_write_register_1 */
-  uint8_t add[2];
-  uint16_t add16;
-  uint8_t data;
-
-  if (strlen(param) != 7)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (stringToData(param, add, 2) != 0)
-  {
-    return AT_PARAM_ERROR;
-  }
-  param += 5;
-  if (stringToData(param, &data, 1) != 0)
-  {
-    return AT_PARAM_ERROR;
-  }
-  add16 = (((uint16_t)add[0]) << 8) + (uint16_t)add[1];
-  Radio.Write(add16, data);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_write_register_2 */
-
-  /* USER CODE END AT_write_register_2 */
-}
-
-ATEerror_t AT_read_register(const char *param)
-{
-  /* USER CODE BEGIN AT_read_register_1 */
-
-  /* USER CODE END AT_read_register_1 */
-  uint8_t add[2];
-  uint16_t add16;
-  uint8_t data;
-
-  if (strlen(param) != 4)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  if (stringToData(param, add, 2) != 0)
-  {
-    return AT_PARAM_ERROR;
-  }
-
-  add16 = (((uint16_t)add[0]) << 8) + (uint16_t)add[1];
-  data = Radio.Read(add16);
-  AT_PRINTF("REG 0x%04X=0x%02X", add16, data);
-
-  return AT_OK;
-  /* USER CODE BEGIN AT_read_register_2 */
-
-  /* USER CODE END AT_read_register_2 */
-}
-
 /* USER CODE BEGIN EF */
 // INSET commands
 /* AT+WDT=ON|OFF -> +WDT: ON|OFF, a change resets the module (the IWDG is started at boot from EEPROM) */
@@ -1233,6 +787,43 @@ ATEerror_t AT_wdt_set(const char *param){
 ATEerror_t AT_wdt_get(const char *param){
 	uint8_t wdt = eeprom_vars.wdt;
 	AT_PPRINTF("+WDT: %s\r\n", wdt ? "ON" : "OFF");
+	return AT_OK;
+}
+
+/* AT+PROFILE=<n> -> +PROFILE: <n>, then the module resets and the next boot applies the profile
+   (auto_init_run()). Not activated: AT+ID=DevAddr first */
+ATEerror_t AT_profile_set(const char *param){
+	char *end;
+	unsigned long id = strtoul(param, &end, 10);
+
+	if ((end == param) || (*end != '\0') || (id > 255UL)){
+		return AT_PARAM_ERROR;
+	}
+	switch (profile_set((uint8_t)id)){
+	case LW_OK:
+		break;
+	case LW_PARAM_ERROR:
+		return AT_PARAM_ERROR;
+	case LW_BUSY_ERROR:
+		return AT_BUSY_ERROR;
+	default:
+		return AT_ERROR;
+	}
+	AT_PPRINTF("+PROFILE: %u\r\n", (unsigned int)id);
+	dev_reset();      /* sends the answer, resets */
+	return AT_OK;     /* not reached */
+}
+
+/* AT+PROFILE? | AT+PROFILE -> +PROFILE: <n>, DONE | +PROFILE: <n>, PENDING | +PROFILE: NONE
+   PENDING: stored by AT+PROFILE, applying it at boot failed (repeated at the next boot) */
+ATEerror_t AT_profile_get(const char *param){
+	if (dev_state.init_phase == INIT_PHASE_NONE){
+		AT_PPRINTF("+PROFILE: NONE\r\n");
+	}
+	else{
+		AT_PPRINTF("+PROFILE: %u, %s\r\n", (unsigned int)dev_state.profile_id,
+				(dev_state.init_phase == INIT_PHASE_DONE) ? "DONE" : "PENDING");
+	}
 	return AT_OK;
 }
 
@@ -1321,39 +912,6 @@ ATEerror_t AT_ch_set(const char *param){
 	}
 
 	AT_PPRINTF("+CH: %u,%u,DR%u:DR%u\r\n", id, freq, dr_min, dr_max);
-	return AT_OK;
-}
-
-void AT_ch_debug_print(uint8_t id){
-	MibRequestConfirm_t mib;
-	const LoRaMacNvmData_t *ram;
-	const LoRaMacNvmData_t *flash = (const LoRaMacNvmData_t *)LORAWAN_NVM_BASE_ADDRESS;
-	const ChannelParams_t *ch;
-
-	if (id >= 16U){
-		return;
-	}
-
-	mib.Type = MIB_NVM_CTXS;
-	LoRaMacMibGetRequestConfirm(&mib);
-	ram = (const LoRaMacNvmData_t *)mib.Param.Contexts;
-
-	ch = &ram->RegionGroup2.Channels[id];
-	AT_PPRINTF("CH%u RAM:   freq=%u rx1=%u DR%d:DR%d band=%u en=%u\r\n", id,
-			ch->Frequency, ch->Rx1Frequency,
-			ch->DrRange.Fields.Min, ch->DrRange.Fields.Max, ch->Band,
-			(unsigned)((ram->RegionGroup2.ChannelsMask[0] >> id) & 1U));
-
-	ch = &flash->RegionGroup2.Channels[id];
-	AT_PPRINTF("CH%u FLASH: freq=%u rx1=%u DR%d:DR%d band=%u en=%u\r\n", id,
-			ch->Frequency, ch->Rx1Frequency,
-			ch->DrRange.Fields.Min, ch->DrRange.Fields.Max, ch->Band,
-			(unsigned)((flash->RegionGroup2.ChannelsMask[0] >> id) & 1U));
-}
-
-ATEerror_t AT_ch_get(const char *param){
-	// TODO THIS IS JUST DEBUG (not in the command table)
-	AT_ch_debug_print(0);
 	return AT_OK;
 }
 
@@ -1925,7 +1483,10 @@ ATEerror_t AT_key_set(const char *param){
 	for (i = 0; i < 16U; i++){
 		snprintf(&hex[2U * i], 3, "%02X", key[i]);
 	}
-	nvm_dirty = 1U;      /* LoRaWAN NVM context changed: stored at AT+LW=NET,OFF / AT+NVM / AT+RESET */
+	/* identity stored right away (flash written only when the context changed) */
+	if (lw_nvm_store(1U) != LW_OK){
+		return AT_ERROR;
+	}
 	AT_PPRINTF("+KEY: %s %s\r\n", name, hex);
 	return AT_OK;
 }
@@ -1960,7 +1521,10 @@ ATEerror_t AT_id_set(const char *param){
 		return AT_ERROR;
 	}
 
-	nvm_dirty = 1U;      /* LoRaWAN NVM context changed: stored at AT+LW=NET,OFF / AT+NVM / AT+RESET */
+	/* identity stored right away (flash written only when the context changed) */
+	if (lw_nvm_store(1U) != LW_OK){
+		return AT_ERROR;
+	}
 	AT_PPRINTF("+ID: DevAddr, %02X:%02X:%02X:%02X\r\n", id[0], id[1], id[2], id[3]);
 	return AT_OK;
 }
@@ -2318,12 +1882,16 @@ ATEerror_t AT_test_set(const char *param){
 
 ATEerror_t AT_lowpower_set(const char *param){
 	if (strcasecmp(param, "AUTOON") == 0){
-		dev_lowpower_auto_set(true);
+		if (dev_lowpower_auto_set(true) != LW_OK){
+			return AT_ERROR;
+		}
 		AT_PPRINTF("+LOWPOWER: AUTOON\r\n");
 		return AT_OK;
 	}
 	else if (strcasecmp(param, "AUTOOFF") == 0){
-		dev_lowpower_auto_set(false);
+		if (dev_lowpower_auto_set(false) != LW_OK){
+			return AT_ERROR;
+		}
 		AT_PPRINTF("+LOWPOWER: AUTOOFF\r\n");
 		return AT_OK;
 	}
@@ -2406,21 +1974,6 @@ static int32_t sscanf_16_hhx(const char *from, uint8_t *pt)
   /* USER CODE END sscanf_16_hhx_2 */
 }
 
-static void print_uint32_as_02x(uint32_t value)
-{
-  /* USER CODE BEGIN print_uint32_as_02x_1 */
-
-  /* USER CODE END print_uint32_as_02x_1 */
-  AT_PPRINTF("%02X:%02X:%02X:%02X\r\n",
-            (unsigned)((unsigned char *)(&value))[3],
-            (unsigned)((unsigned char *)(&value))[2],
-            (unsigned)((unsigned char *)(&value))[1],
-            (unsigned)((unsigned char *)(&value))[0]);
-  /* USER CODE BEGIN print_uint32_as_02x_2 */
-
-  /* USER CODE END print_uint32_as_02x_2 */
-}
-
 static void print_16_02x(uint8_t *pt)
 {
   /* USER CODE BEGIN print_16_02x_1 */
@@ -2468,83 +2021,6 @@ static void print_u(uint32_t value)
   /* USER CODE BEGIN print_u_2 */
 
   /* USER CODE END print_u_2 */
-}
-
-static uint8_t Char2Nibble(char Char)
-{
-  if (((Char >= '0') && (Char <= '9')))
-  {
-    return Char - '0';
-  }
-  else if (((Char >= 'a') && (Char <= 'f')))
-  {
-    return Char - 'a' + 10;
-  }
-  else if ((Char >= 'A') && (Char <= 'F'))
-  {
-    return Char - 'A' + 10;
-  }
-  else
-  {
-    return 0xF0;
-  }
-  /* USER CODE BEGIN CertifSend_2 */
-
-  /* USER CODE END CertifSend_2 */
-}
-
-static int32_t stringToData(const char *str, uint8_t *data, uint32_t Size)
-{
-  /* USER CODE BEGIN stringToData_1 */
-
-  /* USER CODE END stringToData_1 */
-  char hex[3];
-  hex[2] = 0;
-  int32_t ii = 0;
-  while (Size-- > 0)
-  {
-    hex[0] = *str++;
-    hex[1] = *str++;
-
-    /*check if input is hex */
-    if ((isHex(hex[0]) == -1) || (isHex(hex[1]) == -1))
-    {
-      return -1;
-    }
-    /*check if input is even nb of character*/
-    if ((hex[1] == '\0') || (hex[1] == ','))
-    {
-      return -1;
-    }
-    data[ii] = (Char2Nibble(hex[0]) << 4) + Char2Nibble(hex[1]);
-
-    ii++;
-  }
-
-  return 0;
-  /* USER CODE BEGIN stringToData_2 */
-
-  /* USER CODE END stringToData_2 */
-}
-
-static int32_t isHex(char Char)
-{
-  /* USER CODE BEGIN isHex_1 */
-
-  /* USER CODE END isHex_1 */
-  if (((Char >= '0') && (Char <= '9')) ||
-      ((Char >= 'a') && (Char <= 'f')) ||
-      ((Char >= 'A') && (Char <= 'F')))
-  {
-    return 0;
-  }
-  else
-  {
-    return -1;
-  }
-  /* USER CODE BEGIN isHex_2 */
-
-  /* USER CODE END isHex_2 */
 }
 
 /* USER CODE BEGIN PrFD */

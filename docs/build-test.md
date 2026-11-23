@@ -12,7 +12,6 @@
 | Switch | 1 | 0 |
 |---|---|---|
 | `DEBUGGING` | Devkit LED on PB5 while awake (`DBG_LED_ON/OFF`); log level set to `VLEVEL_H` at boot (`main()`), so `DEBUG_PRINTF` lines are printed | PB5 analog; log level stays OFF until `AT+LOG=DEBUG` |
-| `DEMO_ENABLED` | Demo code in `main.c` compiled in (configures like `lorae5_setup.ps1`, 5 uplinks, NVM store, reset, 5 uplinks; phase in EEPROM VA 15) | Normal AT firmware |
 
 ## Test builds (agents)
 - Never build into the project `Debug/` folder; use a scratch directory.

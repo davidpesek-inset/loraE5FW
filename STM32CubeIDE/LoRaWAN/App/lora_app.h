@@ -94,6 +94,7 @@ void LoRaWAN_Init(void);
 
 /* USER CODE BEGIN EFP */
 void LoRaWAN_StartAbp(void);
+void LoRaWAN_ApplyEeprom(void);
 void LoRaWAN_Reconfigure(void);
 /* USER CODE END EFP */
 

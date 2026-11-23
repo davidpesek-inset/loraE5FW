@@ -13,7 +13,7 @@
  *
  * Values are read where they take effect: LoRaMac NVM context (stack parameters, channels, FCnt),
  * secure element (keys), UART / IWDG handles, trace module. Settings the application reads
- * directly from eeprom_vars / ram_vars (port, retry, THLD, CT, DUMRX, low power) come from there.
+ * directly from eeprom_vars (port, retry, THLD, CT, DUMRX, low power) come from there.
  * Prints the session keys in clear. Waits while the trace FIFO is full (about 2 s at 9600 Bd).
  */
 void print_config(void);

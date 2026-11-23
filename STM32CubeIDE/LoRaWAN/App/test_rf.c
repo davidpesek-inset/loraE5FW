@@ -112,10 +112,6 @@ static int8_t tst_rx_snr;
 /* Private function prototypes -----------------------------------------------*/
 
 /*!
- * \brief Generates a PRBS9 sequence
- */
-static int32_t Prbs9_generator(uint8_t *payload, uint8_t len);
-/*!
  * \brief Function to be executed on Radio Tx Done event
  */
 void OnTxDone(void);
@@ -143,7 +139,6 @@ void OnRxError(void);
 /* USER CODE BEGIN PFP */
 static void TST_LoraInit(void);
 static void TST_RxPrint(void);
-static void TST_RxBeacon(void);
 /* USER CODE END PFP */
 
 /* Exported functions --------------------------------------------------------*/
@@ -186,132 +181,6 @@ int32_t TST_stop(void)
   /* USER CODE BEGIN TST_stop_2 */
 
   /* USER CODE END TST_stop_2 */
-}
-
-int32_t TST_TX_Start(int32_t nb_packet)
-{
-  /* USER CODE BEGIN TST_TX_Start_1 */
-
-  /* USER CODE END TST_TX_Start_1 */
-  int32_t i;
-  TxConfigGeneric_t TxConfig;
-
-  if ((TestState & TX_TEST_MODU) != TX_TEST_MODU)
-  {
-    TestState |= TX_TEST_MODU;
-
-    APP_TPRINTF("Tx Test\r\n");
-
-    /* Radio initialization */
-    RadioEvents.TxDone = OnTxDone;
-    RadioEvents.RxDone = OnRxDone;
-    RadioEvents.TxTimeout = OnTxTimeout;
-    RadioEvents.RxTimeout = OnRxTimeout;
-    RadioEvents.RxError = OnRxError;
-    Radio.Init(&RadioEvents);
-    /*Fill payload with PRBS9 data*/
-    Prbs9_generator(payload, testParam.payloadLen);
-
-    /* Launch several times payload: nb times given by user */
-    for (i = 1; i <= nb_packet; i++)
-    {
-      APP_TPRINTF("Tx %d of %d\r\n", i, nb_packet);
-      Radio.SetChannel(testParam.freq);
-
-      if (testParam.modulation == TEST_FSK)
-      {
-        /*fsk modulation*/
-        uint8_t syncword[] = { 0xC1, 0x94, 0xC1, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        TxConfig.fsk.ModulationShaping = (RADIO_FSK_ModShapings_t)((testParam.BTproduct == 0) ? 0 : testParam.BTproduct + 7);
-        TxConfig.fsk.FrequencyDeviation = testParam.fskDev;
-        TxConfig.fsk.BitRate = testParam.loraSf_datarate; /*BitRate*/
-        TxConfig.fsk.PreambleLen = 3;   /*in Byte        */
-        TxConfig.fsk.SyncWordLength = 3; /*in Byte        */
-        TxConfig.fsk.SyncWord = syncword; /*SyncWord Buffer*/
-        TxConfig.fsk.whiteSeed = 0x01FF; /*WhiteningSeed  */
-        TxConfig.fsk.HeaderType = RADIO_FSK_PACKET_VARIABLE_LENGTH; /* If the header is explicit, it will be transmitted in the GFSK packet. If the header is implicit, it will not be transmitted*/
-        TxConfig.fsk.CrcLength = RADIO_FSK_CRC_2_BYTES_CCIT;       /* Size of the CRC block in the GFSK packet*/
-        TxConfig.fsk.CrcPolynomial = 0x1021;
-        TxConfig.fsk.Whitening = RADIO_FSK_DC_FREE_OFF;
-        Radio.RadioSetTxGenericConfig(GENERIC_FSK, &TxConfig, testParam.power, TX_TIMEOUT_VALUE);
-      }
-      else if (testParam.modulation == TEST_MSK)
-      {
-        /*fsk modulation*/
-        uint8_t syncword[] = { 0xC1, 0x94, 0xC1, 0x00, 0x00, 0x00, 0x00, 0x00 };
-        TxConfig.msk.ModulationShaping = (RADIO_FSK_ModShapings_t)((testParam.BTproduct == 0) ? 0 : testParam.BTproduct + 7);
-        TxConfig.msk.BitRate = testParam.loraSf_datarate; /*BitRate*/
-        TxConfig.msk.PreambleLen = 3;   /*in Byte        */
-        TxConfig.msk.SyncWordLength = 3; /*in Byte        */
-        TxConfig.msk.SyncWord = syncword; /*SyncWord Buffer*/
-        TxConfig.msk.whiteSeed = 0x01FF; /*WhiteningSeed  */
-        TxConfig.msk.HeaderType = RADIO_FSK_PACKET_VARIABLE_LENGTH; /* If the header is explicit, it will be transmitted in the GFSK packet. If the header is implicit, it will not be transmitted*/
-        TxConfig.msk.CrcLength = RADIO_FSK_CRC_2_BYTES_CCIT;       /* Size of the CRC block in the GFSK packet*/
-        TxConfig.msk.CrcPolynomial = 0x1021;
-        TxConfig.msk.Whitening = RADIO_FSK_DC_FREE_OFF;
-        Radio.RadioSetTxGenericConfig(GENERIC_MSK, &TxConfig, testParam.power, TX_TIMEOUT_VALUE);
-      }
-      else if (testParam.modulation == TEST_LORA)
-      {
-        /*lora modulation*/
-        TxConfig.lora.Bandwidth = (RADIO_LoRaBandwidths_t) testParam.bandwidth;
-        TxConfig.lora.SpreadingFactor = (RADIO_LoRaSpreadingFactors_t) testParam.loraSf_datarate; /*BitRate*/
-        TxConfig.lora.Coderate = (RADIO_LoRaCodingRates_t)testParam.codingRate;
-        TxConfig.lora.LowDatarateOptimize = (RADIO_Ld_Opt_t)testParam.lowDrOpt; /*0 inactive, 1 active, 2: auto*/
-        TxConfig.lora.PreambleLen = LORA_PREAMBLE_LENGTH;
-        TxConfig.lora.LengthMode = RADIO_LORA_PACKET_VARIABLE_LENGTH;
-        TxConfig.lora.CrcMode = RADIO_LORA_CRC_ON;
-        TxConfig.lora.IqInverted = RADIO_LORA_IQ_NORMAL;
-        Radio.RadioSetTxGenericConfig(GENERIC_LORA, &TxConfig, testParam.power, TX_TIMEOUT_VALUE);
-        Radio.SetPublicNetwork(false); /*set private syncword*/
-      }
-      else if (testParam.modulation == TEST_BPSK)
-      {
-        TxConfig.bpsk.BitRate = testParam.loraSf_datarate; /*BitRate*/
-        Radio.RadioSetTxGenericConfig(GENERIC_BPSK, &TxConfig, testParam.power, TX_TIMEOUT_VALUE);
-      }
-      else
-      {
-        return -1; /*error*/
-      }
-      /* Send payload once*/
-      Radio.Send(payload, testParam.payloadLen);
-      /* Wait Tx done/timeout */
-      UTIL_SEQ_WaitEvt(1 << CFG_SEQ_Evt_RadioOnTstRF);
-      Radio.Sleep();
-
-      if (RadioTxDone_flag == 1)
-      {
-        APP_TPRINTF("OnTxDone\r\n");
-      }
-
-      if (RadioTxTimeout_flag == 1)
-      {
-        APP_TPRINTF("OnTxTimeout\r\n");
-      }
-
-      if (RadioError_flag == 1)
-      {
-        APP_TPRINTF("OnRxError\r\n");
-      }
-
-      /*Delay between 2 consecutive Tx*/
-      HAL_Delay(500);
-      /* Reset TX Done or timeout flags */
-      RadioTxDone_flag = 0;
-      RadioTxTimeout_flag = 0;
-      RadioError_flag = 0;
-    }
-    TestState &= ~TX_TEST_MODU;
-    return 0;
-  }
-  else
-  {
-    return -1;
-  }
-  /* USER CODE BEGIN TST_TX_Start_2 */
-
-  /* USER CODE END TST_TX_Start_2 */
 }
 
 /* USER CODE BEGIN EF */
@@ -367,29 +236,6 @@ int32_t TST_RxLoraContinuous(void){
 	return 0;
 }
 
-// future use for receiving single timestamp packet from beacon
-int32_t TST_RxLoraSingle(void){
-	RxConfigGeneric_t RxConfig = {0};
-
-	UTIL_SEQ_RegTask((1 << CFG_SEQ_Task_TstRxOnce), UTIL_SEQ_RFU, TST_RxBeacon);
-	TST_LoraInit();
-	RxConfig.lora.Bandwidth = (RADIO_LoRaBandwidths_t)testParam.bandwidth;
-	RxConfig.lora.SpreadingFactor = (RADIO_LoRaSpreadingFactors_t)testParam.loraSf_datarate;
-	RxConfig.lora.Coderate = (RADIO_LoRaCodingRates_t)testParam.codingRate;
-	RxConfig.lora.LowDatarateOptimize = (RADIO_Ld_Opt_t)testParam.lowDrOpt;
-	RxConfig.lora.PreambleLen = TST_LR_RX_PREAMBLE;
-	RxConfig.lora.LengthMode = RADIO_LORA_PACKET_VARIABLE_LENGTH;
-	RxConfig.lora.CrcMode = RADIO_LORA_CRC_ON;
-	RxConfig.lora.IqInverted = RADIO_LORA_IQ_NORMAL;
-	Radio.RadioSetRxGenericConfig(GENERIC_LORA, &RxConfig, RX_CONTINUOUS_ON, LORA_SYMBOL_TIMEOUT);
-	Radio.SetPublicNetwork(false);
-
-	Radio.Rx(RX_TIMEOUT_VALUE);
-	UTIL_SEQ_WaitEvt(1 << CFG_SEQ_Evt_RadioOnTstRF);
-	Radio.Sleep();
-	// ...
-	return 0;
-}
 /* USER CODE END EF */
 
 /* Private Functions Definition -----------------------------------------------*/
@@ -473,28 +319,6 @@ void OnRxError(void)
   /* USER CODE END OnRxError_2 */
 }
 
-static int32_t Prbs9_generator(uint8_t *payload, uint8_t len)
-{
-  /* USER CODE BEGIN Prbs9_generator_1 */
-
-  /* USER CODE END Prbs9_generator_1 */
-  uint16_t prbs9_val = PRBS9_INIT;
-  /*init payload to 0*/
-  UTIL_MEM_set_8(payload, 0, len);
-
-  for (int32_t i = 0; i < len * 8; i++)
-  {
-    /*fill buffer with prbs9 sequence*/
-    int32_t newbit = (((prbs9_val >> 8) ^ (prbs9_val >> 4)) & 1);
-    prbs9_val = ((prbs9_val << 1) | newbit) & 0x01ff;
-    payload[i / 8] |= ((prbs9_val & 0x1) << (i % 8));
-  }
-  return 0;
-  /* USER CODE BEGIN Prbs9_generator_2 */
-
-  /* USER CODE END Prbs9_generator_2 */
-}
-
 /* USER CODE BEGIN PrFD */
 /* Radio events and channel for TXLRPKT/RXLRPKT. Radio.Init() takes the radio back from a running RXLRPKT */
 static void TST_LoraInit(void){
@@ -528,15 +352,4 @@ static void TST_RxPrint(void){
 	AT_PPRINTF("\"\r\n");
 }
 
-// save timestamp to rtc
-static void TST_RxBeacon(void){
-	uint8_t i;
-
-	AT_PPRINTF("+TEST: RX \"");
-	for (i = 0; i < tst_rx_len; i++){
-		AT_PPRINTF("%02X", tst_rx_buf[i]);
-	}
-	AT_PPRINTF("\"\r\n");
-	// ...
-}
 /* USER CODE END PrFD */

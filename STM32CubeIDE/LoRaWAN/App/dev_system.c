@@ -79,14 +79,18 @@ LW_Status_t dev_uart_timeout_set(uint16_t ms){
 	return LW_OK;
 }
 
-void dev_lowpower_auto_set(bool on){
+LW_Status_t dev_lowpower_auto_set(bool on){
 	DEBUG_PRINTF("Setting auto low power %s\r\n", on ? "ON" : "OFF");
-	ram_vars.lowpower_auto = on ? 1U : 0U;
+	if (eeprom_set_lowpower(on ? 1U : 0U) != EE_OK){
+		DEBUG_PRINTF("Auto low power not stored in EEPROM\r\n");
+		return LW_ERROR;
+	}
+	return LW_OK;
 }
 
 void dev_lowpower_sleep(void){
 	DEBUG_PRINTF("Low power sleep requested\r\n");
-	ram_vars.lowpower_once = 1U;
+	dev_state.lowpower_once = 1U;
 }
 
 LW_Status_t dev_rtc_set(unsigned long* timeSet){

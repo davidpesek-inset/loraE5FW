@@ -6,7 +6,7 @@ Project documentation of the LoRa-E5 LoRaWAN modem firmware. Project brief: [con
 |---|---|
 | [architecture.md](architecture.md) | Layers, modules, data flow |
 | [stack-constraints.md](stack-constraints.md) | LoRaMac / LmHandler behaviour our code depends on. **Read before changing `lw_*` or `lora_app.c`** |
-| [boot.md](boot.md) | Init sequence: first boot vs. later boots |
+| [boot.md](boot.md) | Init sequence, configuration phases, profile setting |
 | [persistence.md](persistence.md) | What is stored where (EEPROM, NVM context, RAM) and when |
 | [at-commands.md](at-commands.md) | Implemented AT commands: format, function, response |
 | [decisions.md](decisions.md) | Decision log |
@@ -24,7 +24,7 @@ API reference: Doxygen comments in the `LoRaWAN/App/*.h` headers
 
 ## Conventions
 - English, concise. Describe functional blocks, not every function.
-- Code links: file + function name, e.g. [main.c](../STM32CubeIDE/Core/Src/main.c) → `init_pre_join()`.
+- Code links: file + function name, e.g. [auto_init.c](../STM32CubeIDE/LoRaWAN/App/auto_init.c) → `auto_init_run()`.
   No line numbers.
 - Only facts verified in the code. Designs not implemented yet go to [known-issues.md](known-issues.md).
 - Paths in the docs are relative to the repo root; firmware code lives in `STM32CubeIDE/`.

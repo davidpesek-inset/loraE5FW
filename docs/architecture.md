@@ -21,7 +21,7 @@ flowchart TD
 ```
 
 - **AT layer** only parses commands and prints responses. All functionality lives in the C API,
-  so the same features can be used from C code (e.g. the boot configuration in `main.c`).
+  so the same features can be used from C code (e.g. the boot configuration in `auto_init.c`).
 - **C API** returns `LW_Status_t` ([lw_types.h](../STM32CubeIDE/LoRaWAN/App/lw_types.h)); every
   public function is Doxygen-documented in its header.
 - **Middleware** is the CubeWL `LoRaWAN_AT_Slave` stack, locally patched with weak hooks
@@ -35,17 +35,20 @@ flowchart TD
 | `lora_at.c` | AT handlers: parameter parsing, calls into the C API, response text, `AT_event_*` outputs |
 | `lw_types.h` | `LW_Status_t`, `LW_TxResult_t`, TX/RX callback types |
 | `lw_core` | NVM context get/store (`lw_nvm_store()`), mode LWABP/TEST (`lw_mode_set()`, `lw_mode_get()` = LoRaMac stopped), `lw_abp_deactivate()` |
-| `lw_config` | Region, DR, channels, class, ADR, power, DC, NET, RX delays, FCnt, keys, DevAddr |
+| `lw_config` | Region, DR, channels (`lw_ch_set()`, `lw_ch_disable()`), class, ADR, power, DC, NET, RX delays, FCnt (no keys / DevAddr, see [known-issues.md](known-issues.md)) |
 | `lw_link` | `lw_send()`, TX done / RX callbacks, port, retry (confirmed), rept (NbTrans) |
 | `lw_options` | Seeed options CT / DUMRX / THLD + strong definitions of the middleware weak hooks |
-| `dev_system` | Reset, WDT, log level, UART baud / timeout, low power, RTC |
+| `dev_system` | Reset, WDT, log level, UART baud / timeout, low power (auto mode stored in EEPROM), RTC |
 | `lora_app.c` | LmHandler init, configuration and callbacks |
-| `eeprom_wrapper` | `eeprom_vars` (EEPROM emulation) and `ram_vars` (RAM only), see [persistence.md](persistence.md) |
+| `init_config` | Data only: configuration profiles (`profiles[]`, const), `eeprom_vars` (RAM copy of the EEPROM part), `dev_state` (`init_phase`, profile ID, `lowpower_once`). Types and constants in `init_config.h` ([persistence.md](persistence.md)) |
+| `auto_init` | Boot decision and autoconfiguration: `auto_init_run()` called from `main()`: not configured → waits for AT commands; otherwise `LoRaWAN_StartAbp()` and `init_post_join()` (profile NVM part once); every boot ends with `LoRaWAN_ApplyEeprom()` (DR / DC / NET). `profile_set()` (`AT+PROFILE`) stores a profile ([boot.md](boot.md)) |
+| `eeprom_wrapper` | EEPROM emulation: `eeprom_vars_init()` fills `eeprom_vars` and `dev_state`, `eeprom_set_*()` setters update `eeprom_vars` and EEPROM ([persistence.md](persistence.md)) |
 | `demo_funcs` | Demo and debug helpers, not part of the boot: `print_config()` prints the active configuration (reads NVM context, secure element, EEPROM / RAM variables; keys in clear) |
 | `test_rf` | AT+TEST mode: RF test functions using the radio directly |
 
 CubeMX code in `STM32CubeIDE/Core/` (`main.c`, `sys_app.c`, `sys_conf.h`, `usart.c`, ...): edit only
-inside `USER CODE` blocks.
+inside `USER CODE` blocks. Exception (decision 2026-11-13): the ST AT files `lora_at.c`, `lora_command.c`, `lora_at.h` are edited
+outside USER CODE, because the project has no `.ioc` file and CubeMX cannot regenerate them.
 
 ## Data flow
 

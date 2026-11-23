@@ -222,8 +222,9 @@ void LoRaWAN_StartAbp(void)
 }
 
 /* LmHandlerConfigure() overwrites NET, DC and the handler DR with the defaults:
-   apply the values set by AT+LW=NET, AT+LW=DC and AT+DR (EEPROM). Called after every LmHandlerConfigure() */
-static void LoRaWAN_ApplyEeprom(void)
+   apply the values set by AT+LW=NET, AT+LW=DC and AT+DR (EEPROM). Called after every LmHandlerConfigure()
+   (boot: auto_init_run()). Stack only, writes no EEPROM */
+void LoRaWAN_ApplyEeprom(void)
 {
 	DEBUG_PRINTF("Applying DR, NET, DC configuration from eeprom, since they are overwritten with LoRaMac defaults on LmHandlerConfigure()\r\n");
   MibRequestConfirm_t mib;
@@ -331,10 +332,6 @@ void LoRaWAN_Init(void)
   {
     LoRaMacStart();
   }
-
-  /* Boot: NET, DC and DR from EEPROM, then ABP activation (default mode LWABP), as after AT+MODE=LWABP.
-     Without it AT+LW=NET returns ON after every reset and a module-only reset stops the uplinks */
-  // LoRaWAN_ApplyEeprom();
 
   /* Seeed emulation: no boot banner, an unsolicited line after AT+RESET / a reset breaks the ESP driver */
   //APP_PPRINTF("ATtention command interface\r\n");

@@ -10,7 +10,7 @@ The handlers are thin: the real work is done by plain C functions in `lw_*` / `d
 ## Interface
 
 - **UART:** USART1, 8N1, no flow control. Baud rate from EEPROM (`AT+UART=BR`), **default 9600**
-  ([eeprom_wrapper.c](../STM32CubeIDE/LoRaWAN/App/eeprom_wrapper.c) `EE_DEF_UART_BR`; `USART_BAUDRATE` 115200 in
+  ([init_config.c](../STM32CubeIDE/LoRaWAN/App/init_config.c) default profile; `USART_BAUDRATE` 115200 in
   [main.h](../STM32CubeIDE/Core/Inc/main.h) is only the initial value that [usart.c](../STM32CubeIDE/Core/Src/usart.c)
   replaces from EEPROM at init).
 - **Input:** a line ends with `\r` or `\n` (`\r\n` is fine, empty lines are ignored). Max 539 characters
@@ -43,8 +43,7 @@ The handlers are thin: the real work is done by plain C functions in `lw_*` / `d
   (commands without a query) or the getter fails, nothing is printed.
 - All lines end with `\r\n`. Query answers of the inherited ST commands are bare values without `+CMD:` prefix
   (marked "bare" below).
-- **Silent commands** (success prints nothing): `NWKKEY/APPKEY/NWKSKEY/APPSKEY/DADDR/DEUI/NWKID` set, `LINKC`,
-  `JN1DL/JN2DL`, `RX2DR`, `RX2FQ`, `PGSLOT` set, `TTH`.
+- **Silent commands** (success prints nothing): `NWKKEY/APPKEY/DEUI` set, `JN1DL/JN2DL` set.
 
 ### Unsolicited output
 
@@ -62,9 +61,11 @@ The other `AT_event_*` (`join`, `confirm`, `ClassUpdate`, `Beacon`) return immed
 
 ### Persistence legend
 
-- **EEPROM** - `eeprom_vars` in [eeprom_wrapper.c](../STM32CubeIDE/LoRaWAN/App/eeprom_wrapper.c), written at once.
+- **EEPROM** - `eeprom_vars` ([init_config.h](../STM32CubeIDE/LoRaWAN/App/init_config.h)) and its EEPROM variables
+  ([eeprom_wrapper.c](../STM32CubeIDE/LoRaWAN/App/eeprom_wrapper.c)), written at once.
 - **NVM** - LoRaWAN stack context in RAM, `nvm_dirty` is set; written to flash only by `lw_nvm_store()`
-  ([lw_core.c](../STM32CubeIDE/LoRaWAN/App/lw_core.c)), i.e. at `AT+RESET`, `AT+WDT` change and `AT+LW=NET,OFF`
+  ([lw_core.c](../STM32CubeIDE/LoRaWAN/App/lw_core.c)), i.e. at `AT+RESET`, `AT+PROFILE`, `AT+WDT` change and `AT+LW=NET,OFF`, and at once by the
+  identity commands `AT+KEY`, `AT+ID`
   (not in TEST mode). Details: [persistence.md](persistence.md).
 - **RAM** - lost at reset.
 
@@ -81,8 +82,8 @@ The other `AT_event_*` (`join`, `confirm`, `ClassUpdate`, `Beacon`) return immed
 | `AT+UART=BR,<baud>` | `+UART: BR, <baud>` | `AT_uart_set()` -> `dev_uart_baud_set()` | EEPROM `uart_baud` | allowed: 9600, 14400, 19200, 38400, 57600, 76800, 115200, 230400 (else `AT_PARAM_ERROR`). Active **after reset** (host sends `AT+RESET`) |
 | `AT+UART=TIMEOUT,<ms>` | `+UART: TIMEOUT, <ms>` | `AT_uart_set()` -> `dev_uart_timeout_set()` | EEPROM `uart_timeout_ms` | 0..65535, 0 = off, default 1000. Timer restarts with every character ([lora_command.c](../STM32CubeIDE/LoRaWAN/App/lora_command.c) `CMD_GetChar()`) |
 | `AT+UART=BR` / `=TIMEOUT` | current EEPROM value in the same format | `AT_uart_set()` | - | `BR` shows the stored value, not necessarily the active one before a reset |
-| `AT+LOWPOWER` | `+LOWPOWER: SLEEP` | `AT_lowpower_run()` -> `dev_lowpower_sleep()` | RAM | Stop mode on idle until the next non-CR/LF UART byte |
-| `AT+LOWPOWER=AUTOON\|AUTOOFF` | `+LOWPOWER: AUTOON\|AUTOOFF` | `AT_lowpower_set()` -> `dev_lowpower_auto_set()` | RAM | default AUTOON (Stop mode when idle); AUTOOFF = Sleep mode only (`UTIL_SEQ_Idle()` in sys_app.c). After a 0xFF wake-up byte Stop stays off until one valid command has run |
+| `AT+LOWPOWER` | `+LOWPOWER: SLEEP` | `AT_lowpower_run()` -> `dev_lowpower_sleep()` | RAM (`dev_state.lowpower_once`) | Stop mode on idle until the next non-CR/LF UART byte |
+| `AT+LOWPOWER=AUTOON\|AUTOOFF` | `+LOWPOWER: AUTOON\|AUTOOFF` | `AT_lowpower_set()` -> `dev_lowpower_auto_set()` | EEPROM `lowpower_auto` | `AT_ERROR` if the EEPROM write fails. Default AUTOON (Stop mode when idle), kept over a reset; AUTOOFF = Sleep mode only (`UTIL_SEQ_Idle()` in sys_app.c). After a 0xFF wake-up byte Stop stays off until one valid command has run |
 | `AT+TEMP` / `AT+TEMP?` | `+TEMP: <n>.0` | `AT_temp_run()` | - | whole degrees C, decimal always 0 |
 | `AT+RTC="YYYY-MM-DD HH:MM:SS"` | echo `+RTC: YYYY-MM-DD HH:MM:SS` | `AT_rtc_set()` -> `dev_rtc_set()` | SysTime offset in RTC backup registers | quotes required; year 2000..2099, month 1..12, day 1..31 (not checked against the month), `AT_PARAM_ERROR` otherwise |
 | `AT+RTC` / `AT+RTC?` | `+RTC: YYYY-MM-DD HH:MM:SS` | `AT_rtc_get()` -> `dev_rtc_get()` | - | UTC |
@@ -97,7 +98,7 @@ unless noted. Persistence **NVM** means "marked dirty, flash write later" (see l
 
 | Command | Forms and response | C function | Persistence | Notes |
 |---|---|---|---|---|
-| `AT+DR=<0..5>` | `+DR: EU868 DR<n>  SF<12-n> BW125K` (two spaces before `BW125K` for n > 2, one for n <= 2) | `AT_DataRate_set()` -> [lw_config.c](../STM32CubeIDE/LoRaWAN/App/lw_config.c) `lw_dr_set()` | EEPROM `dr` + NVM | other values `AT_PARAM_ERROR`; ADR is switched off just for the call. EEPROM `dr` is re-applied at every boot by `init_post_join()` in main.c |
+| `AT+DR=<0..5>` | `+DR: EU868 DR<n>  SF<12-n> BW125K` (two spaces before `BW125K` for n > 2, one for n <= 2) | `AT_DataRate_set()` -> [lw_config.c](../STM32CubeIDE/LoRaWAN/App/lw_config.c) `lw_dr_set()` | EEPROM `dr` + NVM | other values `AT_PARAM_ERROR`; ADR is switched off just for the call. EEPROM `dr` is re-applied at every boot by `auto_init_run()` (`LoRaWAN_ApplyEeprom()`) in [auto_init.c](../STM32CubeIDE/LoRaWAN/App/auto_init.c) |
 | `AT+DR=EU868` | `+DR: EU868` | `AT_DataRate_set()` -> `lw_region_set()` | - | region is fixed (EU868), only checked; `AT_ERROR` once a session is active (also after a boot with a restored ABP context) |
 | `AT+DR?` | bare DR number | `AT_DataRate_get()` | - | |
 | `AT+CH=<ch>,<MHz>,DR<min>,DR<max>` | `+CH: <ch>,<Hz>,DR<min>:DR<max>` | `AT_ch_set()` -> `lw_ch_set()` | NVM | ch 0..15, MHz with up to 6 decimals, DR<max> <= 7, min <= max, else `AT_PARAM_ERROR` (syntax). Enables the channel, sets the duty cycle band. Frequency outside the EU868 sub-bands: refused with `AT+LW=CT,ON`, accepted with CT OFF (default) if within 150..960 MHz. Out-of-range frequency and busy stack give `AT_ERROR`. No query |
@@ -110,8 +111,10 @@ unless noted. Persistence **NVM** means "marked dirty, flash write later" (see l
 | `AT+DELAY=RX1\|RX2,<ms>` | `+DELAY: <ms>` | `AT_delay_set()` -> `lw_rx1Delay_set()` / `lw_rx2Delay_set()` | NVM | `AT+DELAY=RX1` (no value) reads |
 | `AT+DELAY?RX1` / `?RX2` | `+DELAY: <ms>` | `AT_delay_get()` | - | |
 | `AT+RXWIN1=0,0` | `+RXWIN1: 0,0` | `AT_rxwin1_set()` | - | only `0,0` (RX1 on the uplink frequency) is accepted, other valid numbers `AT_ERROR`, bad syntax / ch >= 16 `AT_PARAM_ERROR`. Nothing is changed |
-| `AT+KEY=NWKSKEY\|APPSKEY,"<32 hex>"` | `+KEY: <name> <32 hex>` | `AT_key_set()` | NVM | hex without separators, quotes optional, `:`/space between bytes tolerated. Works also with an active session. Busy `AT_BUSY_ERROR` |
-| `AT+ID=DevAddr,"<8 hex>"` | `+ID: DevAddr, XX:XX:XX:XX` | `AT_id_set()` | NVM | as `AT+KEY`, works with an active session. Busy `AT_BUSY_ERROR` |
+| `AT+KEY=NWKSKEY\|APPSKEY,"<32 hex>"` | `+KEY: <name> <32 hex>` | `AT_key_set()` | NVM (stored at once) | hex without separators, quotes optional, `:`/space between bytes tolerated. Works also with an active session. Busy `AT_BUSY_ERROR`, store failure `AT_ERROR` |
+| `AT+ID=DevAddr,"<8 hex>"` | `+ID: DevAddr, XX:XX:XX:XX` | `AT_id_set()` | NVM (stored at once) | as `AT+KEY`, works with an active session. Busy `AT_BUSY_ERROR`, store failure `AT_ERROR` |
+| `AT+PROFILE=<n>` | `+PROFILE: <n>`, then reset | `AT_profile_set()` -> [auto_init.c](../STM32CubeIDE/LoRaWAN/App/auto_init.c) `profile_set()`, then `dev_reset()` | EEPROM (profile's EE part, profile ID, `init_phase`) | the next boot applies the profile's NVM part ([boot.md](boot.md)). Bad number / no such profile `AT_PARAM_ERROR`, busy `AT_BUSY_ERROR`, TEST mode / not activated with DevAddr 0 or equal to the chip-UID default / EEPROM failure `AT_ERROR`. Overwrites earlier AT setters of the profile's values |
+| `AT+PROFILE` / `AT+PROFILE?` | `+PROFILE: NONE` \| `+PROFILE: <n>, DONE` \| `+PROFILE: <n>, PENDING` | `AT_profile_get()` | - | NONE = not configured; PENDING = stored, applying it at boot failed (retried at the next boot) |
 | `AT+PORT=<1..255>` | `+PORT: <n>` | `AT_port_set()` -> [lw_link.c](../STM32CubeIDE/LoRaWAN/App/lw_link.c) `lw_port_set()` | EEPROM `port` | default 8. FPort of `MSGHEX/CMSGHEX` |
 | `AT+PORT` / `AT+PORT?` | `+PORT: <n>` | `AT_port_get()` | - | |
 | `AT+RETRY=<0..254>` | `+RETRY: <n>` | `AT_retry_set()` -> `lw_retry_set()` | EEPROM `retry` | default 1. Transmissions of a confirmed uplink; `lw_send()` clamps to 1..15. No query |
@@ -141,18 +144,11 @@ One command, handlers `AT_lw_set()` / `AT_lw_get()`. `AT+LW=<par>` without value
 | Command | Forms and response | C function | Persistence | Notes |
 |---|---|---|---|---|
 | `AT+NWKKEY` / `AT+APPKEY` | `?` bare `XX:..:XX` (16 bytes); `=XX:..:XX` silent | `AT_NwkKey_get/set()`, `AT_AppKey_get/set()` | NVM (not marked dirty) | OTAA keys, unused in ABP. Bad format `AT_PARAM_ERROR`, stack refusal `AT_ERROR` |
-| `AT+NWKSKEY` / `AT+APPSKEY` | `?` bare 16 bytes; `=XX:..:XX` silent | `AT_NwkSKey_get/set()`, `AT_AppSKey_get/set()` -> `lw_nwkskey_set()` / `lw_appskey_set()` | NVM (not marked dirty) | `LmHandlerSetKey()`: refused with an active session (use `AT+KEY`), any failure incl. bad format `AT_ERROR` |
-| `AT+DADDR` | `?` bare `XX:XX:XX:XX`; `=XX:XX:XX:XX` silent | `AT_DevAddr_get/set()` -> `lw_devaddr_set()` | NVM (not marked dirty) | refused with an active session (use `AT+ID`), failure `AT_ERROR` |
 | `AT+DEUI` | `?` bare `XX:..:XX` (8 bytes); `=` silent | `AT_DevEUI_get/set()` | NVM | |
-| `AT+NWKID` | `?` bare decimal; `=<0..127>` silent | `AT_NetworkID_get/set()` | NVM (not marked dirty) | result of `LmHandlerSetNetworkID()` is not checked |
-| `AT+LINKC` | piggybacks a link check on the next uplink, silent | `AT_Link_Check()` | - | `AT_PARAM_ERROR` when refused |
 | `AT+JN1DL` / `AT+JN2DL` | `?` bare ms; `=<ms>` silent | `AT_JoinAcceptDelay1/2_get/set()` | NVM | join delays, unused in ABP |
-| `AT+RX2DR` | `?` bare DR; `=<0..15>` silent | `AT_Rx2DataRate_get/set()` | NVM | |
-| `AT+RX2FQ` | `?` bare Hz; `=<Hz>` silent | `AT_Rx2Frequency_get/set()` | NVM | |
-| `AT+PGSLOT` | `?` bare 0..7; `=<0..7>` silent | `AT_PingSlot_get/set()` | NVM | Class B |
 
 Only the `AT+X?` form exists for the getters above; `AT+X` without `?` is `AT_ERROR`. The "NVM" persistence of these
-commands is inferred from the stack setters they call; none of these handlers sets `nvm_dirty`, so the change reaches flash
+commands is inferred from the stack setters they call; none of these handlers sets `nvm_dirty` (`AT+KEY` / `AT+ID` are the exception), so the change reaches flash
 only if a later command marks the context dirty (e.g. `AT+LW=NET,OFF`).
 
 ## Uplink and downlink
@@ -195,7 +191,7 @@ Else `AT_PARAM_ERROR`; a failure (e.g. stack busy when entering TEST) gives `AT_
 - **TEST:** halts and stops LoRaMac (the NVM context is kept in RAM). `lw_send()` and `lw_nvm_store()` are refused,
   `AT+LW=ULDL,...` returns `AT_ERROR`, `AT+TEST=TXLRPKT/RXLRPKT` become available.
 
-## Radio test (`AT+TEST`, `AT+TTH`, `AT+TOFF`)
+## Radio test (`AT+TEST`)
 
 [lora_at.c](../STM32CubeIDE/LoRaWAN/App/lora_at.c) `AT_test_set()` dispatches on the first token; backend is
 [test_rf.c](../STM32CubeIDE/LoRaWAN/App/test_rf.c). Only what the ESP driver needs (LoRa beacon). Nothing is stored.
@@ -205,15 +201,14 @@ Else `AT_PARAM_ERROR`; a failure (e.g. stack busy when entering TEST) gives `AT_
 | `AT+TEST=RFCFG,<MHz>,SF<7..12>,<125\|250\|500>,<txpr>,<rxpr>,<dBm>,ON,OFF,OFF` | `+TEST: RFCFG F:<Hz>, SF<sf>, BW<bw>K, TXPR:<n>, RXPR:<n>, POW:<dBm>dBm, CRC:ON, IQ:OFF, NET:OFF` | `AT_test_rfcfg_set()` -> `TST_set_config()` | the tail `,ON,OFF,OFF` is mandatory. The `SF` prefix is optional. Frequency 150..960 MHz, power -9..22. Coding rate 4/5, auto LDRO. TXPR/RXPR only echoed (preambles fixed: TX 12, RX 15). Works in both modes (only stores the config) |
 | `AT+TEST=TXLRPKT,<hex>` | `+TEST: TXLRPKT "<HEX>"`, then `+TEST: TX DONE` or `+TEST: TX TIMEOUT` + `AT_ERROR` | `AT_test_txlrpkt()` -> `TST_TxLoraPacket()` | TEST mode only (else `AT_ERROR`); 1..255 bytes; blocking |
 | `AT+TEST=RXLRPKT` | `+TEST: RXLRPKT`, then per packet `+TEST: RX "<HEX>"` | `AT_test_rxlrpkt()` -> `TST_RxLoraContinuous()` | TEST mode only; continuous RX until `AT+MODE=LWABP` or `TXLRPKT` |
-| `AT+TTH=<Fstart>,<Fstop>,<Fdelta>,<PacketNb>` | silent (debug trace only) | `AT_test_tx_hopping()` | ST test: TX hopping, frequencies < 1000 are taken as MHz; `AT_BUSY_ERROR` if a TX cannot start. Does not require TEST mode |
-| `AT+TOFF` | `Test Stop` | `AT_test_stop()` -> `TST_stop()` | stops the ST test |
 
 Other forms of `AT+TEST` give `AT_PARAM_ERROR`.
 
 ## Not available
 
-- `AT+REGW`, `AT+REGR` (radio register access): code exists (`AT_write_register()`, `AT_read_register()`) but the
-  table entries are compiled out (`AT_RADIO_ACCESS` is not defined) -> `AT_ERROR`.
+- Removed ST commands (`AT+NWKSKEY`, `AT+APPSKEY`, `AT+DADDR`, `AT+NWKID`, `AT+LINKC`, `AT+PGSLOT`, `AT+RX2DR`,
+  `AT+RX2FQ`, `AT+TTH`, `AT+TOFF`, `AT+REGW`, `AT+REGR`) -> `AT_ERROR`. Identity is set only with `AT+KEY` / `AT+ID`;
+  RX2 data rate and frequency cannot be set over AT.
 - Everything else (`AT+JOIN`, `AT+SEND`, ... of the ST example) is not in the table -> `AT_ERROR`. OTAA is not supported.
 
 ## Deviations from Seeed

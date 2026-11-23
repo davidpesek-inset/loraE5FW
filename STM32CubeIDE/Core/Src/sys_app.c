@@ -128,7 +128,7 @@ void SystemApp_Init(void)
 #endif /* LOW_POWER_DISABLE */
 
   /* USER CODE BEGIN SystemApp_Init_2 */
-  /* AT+LOG=QUIET after every reset (ram_vars.log_level = 0): no MW/app logs between the AT answers.
+  /* AT+LOG=QUIET after every reset: no MW/app logs between the AT answers.
      VERBOSE_LEVEL (sys_conf.h) is a CubeMX setting, overridden here */
   UTIL_ADV_TRACE_SetVerboseLevel(VLEVEL_OFF);
   /* USER CODE END SystemApp_Init_2 */
@@ -142,7 +142,7 @@ void UTIL_SEQ_Idle(void)
   /* USER CODE BEGIN UTIL_SEQ_Idle_1 */
   /* AT+LOWPOWER: AUTOOFF = Sleep mode only (WFI, clocks running, any IRQ incl. UART RX wakes it up);
      AUTOON or AT+LOWPOWER (until the next UART byte) = Stop mode via UTIL_LPM below */
-  if ((ram_vars.lowpower_auto == 0U) && (ram_vars.lowpower_once == 0U))
+  if ((eeprom_vars.lowpower_auto == 0U) && (dev_state.lowpower_once == 0U))
   {
     PWR_EnterSleepMode();
     PWR_ExitSleepMode();

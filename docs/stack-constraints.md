@@ -8,8 +8,8 @@ that our code depends on. It is not visible from our code; ignoring it causes re
 - `LmHandlerConfigure()` (from `LoRaWAN_Init()` in [lora_app.c](../STM32CubeIDE/LoRaWAN/App/lora_app.c))
   restores the NVM context, then **overwrites DC (region default ON) and NET (public)**. This
   happens every boot and on TEST → LWABP.
-- EEPROM DR / DC / NET are re-applied by `LoRaWAN_ApplyEeprom()` only in `LoRaWAN_Reconfigure()`
-  (TEST → LWABP), not at boot → set them after boot.
+- EEPROM DR / DC / NET are re-applied by `LoRaWAN_ApplyEeprom()` in `LoRaWAN_Reconfigure()`
+  (TEST → LWABP). At boot `auto_init_run()` calls it as its last step ([boot.md](boot.md)), not `LoRaWAN_Init()`.
 - After `LoRaMacInitialization()` the MAC is stopped. It is started by `LmHandlerJoin()` or, with
   an activated restored context, by `LmHandlerConfigure()` itself. Without a restored context
   `LoRaWAN_Init()` starts it explicitly (`LoRaMacStart()` at its end), see "Working mode" below.
@@ -18,7 +18,8 @@ that our code depends on. It is not visible from our code; ignoring it causes re
 - Restored activated ABP context ⇒ the device is "joined" right after boot. `LmHandlerSetKey()`,
   `LmHandlerSetDevAddr()`, `LmHandlerSetNetworkID()`, `LmHandlerSetActiveRegion()` are then refused:
   call `lw_abp_deactivate()` ([lw_core.c](../STM32CubeIDE/LoRaWAN/App/lw_core.c)) first.
-- First ABP activation (`LmHandlerJoin(ABP)`, only without a restored context): writes DR / power from
+- First ABP activation (`LmHandlerJoin(ABP)`, only when the restore did not happen, `CtxRestoreDone` false in
+  LmHandler.c; a restored context with activation NONE counts as not restored): writes DR / power from
   `LmHandlerParams` (our setters keep them in sync), re-enables default channels 0–2, resets the
   class to `DefaultClass` (A) after a 10 ms pending timer. No `ResetMacParameters()`.
 - Class B / C only after the activation.
@@ -39,6 +40,10 @@ that our code depends on. It is not visible from our code; ignoring it causes re
 ## NVM context
 - Setters set `nvm_dirty`; flash is written only by `lw_nvm_store()`. FCnt changes do not set
   `nvm_dirty`.
+- The stack writes flash only when a context group changed: `NvmDataMgmtStoreBegin()` returns
+  `NVM_DATA_NO_UPDATED_DATA` when `NvmNotifyFlags` is NONE, `LmHandlerNvmDataStore()` then returns
+  `LORAMAC_HANDLER_NVM_DATA_UP_TO_DATE`, which `lw_nvm_store()` treats as OK. A forced store of an unchanged
+  context costs no flash erase. A store while not activated saves the activation as NONE.
 - No NVM store in TEST mode: `NvmDataMgmtStoreEnd()` calls `LoRaMacStart()` and would restart the MAC.
   `lw_nvm_store()` refuses it.
 

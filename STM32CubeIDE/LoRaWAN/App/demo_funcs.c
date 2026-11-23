@@ -46,6 +46,12 @@ void print_config(void){
 	else{
 		CFG_PRINTF("Init phase: not in EEPROM\r\n");
 	}
+	if (dev_state.profile_id != PROFILE_NONE){
+		CFG_PRINTF("Profile: %u\r\n", (unsigned int)dev_state.profile_id);
+	}
+	else{
+		CFG_PRINTF("Profile: not in EEPROM\r\n");
+	}
 
 	if (lw_nvm_get(&nvm) != LW_OK){
 		CFG_PRINTF("NVM context not available\r\n");
@@ -97,11 +103,11 @@ void print_config(void){
 				(((nvm->RegionGroup2.ChannelsMask[0] >> i) & 1U) != 0U) ? "enabled" : "disabled");
 	}
 
-	/* Application settings, used directly from eeprom_vars / ram_vars */
+	/* Application settings, used directly from eeprom_vars */
 	CFG_PRINTF("Port: %u, retry: %u\r\n", (unsigned int)eeprom_vars.port, (unsigned int)eeprom_vars.retry);
 	CFG_PRINTF("THLD: %d dBm, CT: %s, DUMRX: %s\r\n", (int)eeprom_vars.thld_dbm,
 			(eeprom_vars.ct != 0U) ? "ON" : "OFF", (eeprom_vars.dumrx != 0U) ? "ON" : "OFF");
-	CFG_PRINTF("Low power: %s\r\n", (ram_vars.lowpower_auto != 0U) ? "AUTOON" : "AUTOOFF");
+	CFG_PRINTF("Low power: %s\r\n", (eeprom_vars.lowpower_auto != 0U) ? "AUTOON" : "AUTOOFF");
 
 	/* Device */
 	CFG_PRINTF("UART: %u Bd, timeout %u ms\r\n", (unsigned int)huart1.Init.BaudRate,

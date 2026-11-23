@@ -39,7 +39,6 @@
 
 /* comment the following to have help message */
 /* #define NO_HELP */
-/* #define AT_RADIO_ACCESS */
 
 /* Private typedef -----------------------------------------------------------*/
 /**
@@ -157,39 +156,6 @@ static const struct ATCommand_s ATCommand[] =
   },
 
   {
-    .string = AT_NWKSKEY,
-    .size_string = sizeof(AT_NWKSKEY) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_NWKSKEY"=<XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX><CR>: Get or Set the Network Session Key\r\n",
-#endif /* !NO_HELP */
-    .get = AT_NwkSKey_get,
-    .set = AT_NwkSKey_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_APPSKEY,
-    .size_string = sizeof(AT_APPSKEY) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_APPSKEY"=<XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX><CR>: Get or Set the Application Session Key\r\n",
-#endif /* !NO_HELP */
-    .get = AT_AppSKey_get,
-    .set = AT_AppSKey_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_DADDR,
-    .size_string = sizeof(AT_DADDR) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_DADDR"=<XXXXXXXX><CR>. Get or Set the Device address\r\n",
-#endif /* !NO_HELP */
-    .get = AT_DevAddr_get,
-    .set = AT_DevAddr_set,
-    .run = AT_return_error,
-  },
-
-  {
     .string = AT_DEUI,
     .size_string = sizeof(AT_DEUI) - 1,
 #ifndef NO_HELP
@@ -198,29 +164,6 @@ static const struct ATCommand_s ATCommand[] =
     .get = AT_DevEUI_get,
     .set = AT_DevEUI_set,
     .run = AT_return_error,
-  },
-
-  {
-    .string = AT_NWKID,
-    .size_string = sizeof(AT_NWKID) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_NWKID"=<NwkID><CR>. Get or Set the Network ID=[0..127]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_NetworkID_get,
-    .set = AT_NetworkID_set,
-    .run = AT_return_error,
-  },
-
-  /* LoRaWAN join and send data commands */
-  {
-    .string = AT_LINKC,
-    .size_string = sizeof(AT_LINKC) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_LINKC". Piggyback a Link Check Request to the next uplink\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_return_error,
-    .run = AT_Link_Check,
   },
 
   /* LoRaWAN network management commands */
@@ -279,87 +222,6 @@ static const struct ATCommand_s ATCommand[] =
     .run = AT_return_error,
   },
 
-  {
-    .string = AT_RX2DR,
-    .size_string = sizeof(AT_RX2DR) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_RX2DR"=<DataRate><CR>. Get or Set the Rx2 window DataRate=[0..7]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_Rx2DataRate_get,
-    .set = AT_Rx2DataRate_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_RX2FQ,
-    .size_string = sizeof(AT_RX2FQ) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_RX2FQ"=<Freq><CR>. Get or Set the Rx2 window Freq in Hz\r\n",
-#endif /* !NO_HELP */
-    .get = AT_Rx2Frequency_get,
-    .set = AT_Rx2Frequency_set,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_PGSLOT,
-    .size_string = sizeof(AT_PGSLOT) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_PGSLOT"=<Period><CR>. Set or Get the unicast ping slot Period=[0:1s .. 7:128s](=2^Period)\r\n",
-#endif /* !NO_HELP */
-    .get = AT_PingSlot_get,
-    .set = AT_PingSlot_set,
-    .run = AT_return_error,
-  },
-
-  /* Radio tests commands */
-  {
-    .string = AT_TTH,
-    .size_string = sizeof(AT_TTH) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TTH"=<Fstart>,<Fstop>,<Fdelta>,<PacketNb><CR>. Starts RF Tx hopping test from Fstart to Fstop in Hz or MHz, Fdelta in Hz\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_test_tx_hopping,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_TOFF,
-    .size_string = sizeof(AT_TOFF) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_TOFF" Stops on-going RF test\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_return_error,
-    .run = AT_test_stop,
-  },
-
-  /* Radio access commands */
-#ifdef AT_RADIO_ACCESS
-  {
-    .string = AT_REGW,
-    .size_string = sizeof(AT_REGW) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_REGW"=<Addr>:<Data><CR> Write Radio Register Addr=[4 hex char], Data=[2 hex char]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_write_register,
-    .run = AT_return_error,
-  },
-
-  {
-    .string = AT_REGR,
-    .size_string = sizeof(AT_REGR) - 1,
-#ifndef NO_HELP
-    .help_string = "AT"AT_REGR"=<Addr><CR>. Read Radio Register Addr=[4 hex char]\r\n",
-#endif /* !NO_HELP */
-    .get = AT_return_error,
-    .set = AT_read_register,
-    .run = AT_return_error,
-  },
-#endif /*AT_RADIO_ACCESS*/
-
   /* USER CODE BEGIN ATCommand */
 // INSET commands
   {
@@ -371,6 +233,17 @@ static const struct ATCommand_s ATCommand[] =
     .get = AT_wdt_get,
     .set = AT_wdt_set,
     .run = AT_wdt_get,
+  },
+
+  {
+    .string = AT_PROFILE,
+    .size_string = sizeof(AT_PROFILE) - 1,
+#ifndef NO_HELP
+    .help_string = "AT"AT_PROFILE"=<n> Set the configuration profile, applied after a reset\r\n",
+#endif /* !NO_HELP */
+    .get = AT_profile_get,
+    .set = AT_profile_set,
+    .run = AT_profile_get,
   },
 
   {
@@ -390,7 +263,7 @@ static const struct ATCommand_s ATCommand[] =
 #ifndef NO_HELP
     .help_string = "AT"AT_CH"=<ch>,<MHz>,DR<min>,DR<max> Set channel\r\n",
 #endif /* !NO_HELP */
-    .get = AT_return_error,     /* AT_ch_get() is only a debug dump */
+    .get = AT_return_error,
     .set = AT_ch_set,
     .run = AT_return_error,
   },
@@ -821,14 +694,14 @@ static void CMD_GetChar(uint8_t *rxChar, uint16_t size, uint8_t error)
 {
   /* USER CODE BEGIN CMD_GetChar_1 */
 	if ((*rxChar != '\r') && (*rxChar != '\n')) {
-		ram_vars.lowpower_once = 0;
+		dev_state.lowpower_once = 0;
 	}
 	if (*rxChar >= 0x80U) {
 		/* wake-up byte 0xFF of the host (Seeed 4.30.1), possibly corrupted by the wake-up from Stop mode;
 		   AT commands are plain ASCII.
 		   With AUTOON stay awake (Sleep mode only, clocks running) until a valid AT command
 		   has been executed, see parse_cmd */
-		if (ram_vars.lowpower_auto == 1U) {
+		if (eeprom_vars.lowpower_auto == 1U) {
 			UTIL_LPM_SetStopMode((1 << CFG_LPM_UART_WAKE_Id), UTIL_LPM_DISABLE);
 		}
 		return;

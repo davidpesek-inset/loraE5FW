@@ -1,2 +1,2 @@
-a7c0de13605830f72a37a2bbd2e58f76f4f20b09
-2026-11-10: docs synced to HEAD plus uncommitted working-tree changes (print_config() moved to demo_funcs and no longer called at boot, init_post_join() called, DEBUG_PRINTF logging, EE_DEF_DR 2 / EE_DEF_DC 0, ram_vars key strings as char*).
+c3640757871dd62e654ff4a22471e1462680fc98
+2026-11-13: docs synced to HEAD plus uncommitted work (profiles, AT+PROFILE, cleanup of inherited ST AT commands and unused functions, live_config -> eeprom_vars). Not tested on hardware.

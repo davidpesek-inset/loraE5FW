@@ -16,26 +16,9 @@
 #include "Region.h"
 #include "RegionEU868.h"
 #include "LoRaMacCrypto.h"
-#include "stm32_tiny_sscanf.h"
 
 #include "lw_core.h"
 #include "lw_config.h"
-
-/**
- * @brief Parses 16 bytes written as "aa:bb:...:pp" (key format of AT+KEY).
- * @param[in]  from Input string.
- * @param[out] pt   16 byte buffer.
- * @return Number of parsed bytes (16 = complete key).
- */
-static int32_t sscanf_16_hhx(const char *from, uint8_t *pt);
-
-/**
- * @brief Parses 4 bytes written as "aa:bb:cc:dd" (MSB first) into a uint32_t (DevAddr format).
- * @param[in]  from  Input string.
- * @param[out] value Parsed value, "00:18:1F:F1" = 0x00181FF1 (little endian target).
- * @return Number of parsed bytes (4 = complete value).
- */
-static int32_t sscanf_uint32_as_hhx(const char *from, uint32_t *value);
 
 LW_Status_t lw_region_set(LoRaMacRegion_t regionSet){
 	LoRaMacRegion_t RegionActive;
@@ -85,7 +68,7 @@ LW_Status_t lw_dr_set(uint8_t dr){
 		return LW_ERROR;
 	}
 	/* EU868 only (single region build) */
-	nvm_dirty = 1U;      /* LoRaWAN NVM context changed: stored at AT+LW=NET,OFF / AT+NVM / AT+RESET */
+	nvm_dirty = 1U;      /* LoRaWAN NVM context changed: stored at AT+LW=NET,OFF / AT+RESET */
 	return LW_OK;
 }
 
@@ -180,6 +163,41 @@ LW_Status_t lw_ch_set(uint32_t id, uint32_t dr_min, uint32_t dr_max, uint32_t fr
 	return LW_OK;
 }
 
+LW_Status_t lw_ch_disable(uint32_t id){
+	LoRaMacNvmData_t *nvm;
+	ChannelParams_t *ch;
+
+	if (id >= EU868_MAX_NB_CHANNELS){
+		DEBUG_PRINTF("Channel %u out of range\r\n", (unsigned int)id);
+		return LW_PARAM_ERROR;
+	}
+	if (lw_nvm_get(&nvm) != LW_OK){
+		return LW_ERROR;
+	}
+	ch = &nvm->RegionGroup2.Channels[id];
+
+	/* Already disabled and cleared: nothing to set, nothing to store */
+	if ((ch->Frequency == 0U) && (((nvm->RegionGroup2.ChannelsMask[0] >> id) & 1U) == 0U)){
+		return LW_OK;
+	}
+
+	/* LoRaMacIsBusy(), not LmHandlerIsBusy(): the latter starts a join when not activated */
+	if (LoRaMacIsBusy()){
+		DEBUG_PRINTF("LoRaMac busy, cannot disable channel %u\r\n", (unsigned int)id);
+		return LW_BUSY_ERROR;
+	}
+
+	DEBUG_PRINTF("Disabling channel %u\r\n", (unsigned int)id);
+	ch->Frequency = 0U;
+	ch->Rx1Frequency = 0U;
+	ch->DrRange.Value = 0;
+	ch->Band = 0U;
+	nvm->RegionGroup2.ChannelsMask[0] &= (uint16_t)~(1U << id);
+
+	nvm_dirty = 1U;      /* LoRaWAN NVM context changed */
+	return LW_OK;
+}
+
 LW_Status_t lw_class_set(DeviceClass_t class){
 	DEBUG_PRINTF("Setting class %c\r\n", 'A' + (int)class);
 	if (LmHandlerRequestClass(class) != LORAMAC_HANDLER_SUCCESS){
@@ -261,7 +279,7 @@ LW_Status_t lw_power_set(long dbm, bool force){
 		mib.Param.DefaultAntennaGain = gain;
 		LoRaMacMibSetRequestConfirm(&mib);
 
-		/* Index and antenna gain live in the LoRaWAN NVM context: stored at AT+LW=NET,OFF / AT+NVM / AT+RESET */
+		/* Index and antenna gain live in the LoRaWAN NVM context: stored at AT+LW=NET,OFF / AT+RESET */
 		nvm_dirty = 1U;
 	}
 	else{
@@ -378,61 +396,3 @@ LW_Status_t lw_rx2Delay_set(uint32_t delay){
 	return LW_OK;
 }
 
-LW_Status_t lw_nwkskey_set(const char *key){
-	uint8_t nwksKey[16];
-	if (sscanf_16_hhx(key, nwksKey) != 16){
-		DEBUG_PRINTF("NwkSKey format not valid\r\n");
-		return LW_PARAM_ERROR;
-	}
-
-	DEBUG_PRINTF("Setting NwkSKey\r\n");
-	if (LORAMAC_HANDLER_SUCCESS != LmHandlerSetKey(NWK_S_KEY, nwksKey)){
-		DEBUG_PRINTF("NwkSKey refused by the stack\r\n");
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-LW_Status_t lw_appskey_set(const char *key){
-	uint8_t appsKey[16];
-	if (sscanf_16_hhx(key, appsKey) != 16){
-		DEBUG_PRINTF("AppSKey format not valid\r\n");
-		return LW_PARAM_ERROR;
-	}
-
-	DEBUG_PRINTF("Setting AppSKey\r\n");
-	if (LORAMAC_HANDLER_SUCCESS != LmHandlerSetKey(APP_S_KEY, appsKey)){
-		DEBUG_PRINTF("AppSKey refused by the stack\r\n");
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-LW_Status_t lw_devaddr_set(const char *devaddr){
-	uint32_t devAddr;
-	if (sscanf_uint32_as_hhx(devaddr, &devAddr) != 4){
-		DEBUG_PRINTF("DevAddr format not valid\r\n");
-		return LW_PARAM_ERROR;
-	}
-	DEBUG_PRINTF("Setting DevAddr %s\r\n", devaddr);
-	if (LORAMAC_HANDLER_SUCCESS != LmHandlerSetDevAddr(devAddr)){
-		DEBUG_PRINTF("DevAddr refused by the stack\r\n");
-		return LW_ERROR;
-	}
-	return LW_OK;
-}
-
-static int32_t sscanf_16_hhx(const char *from, uint8_t *pt) {
-  return tiny_sscanf(from, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-                     &pt[0], &pt[1], &pt[2], &pt[3], &pt[4], &pt[5], &pt[6],
-                     &pt[7], &pt[8], &pt[9], &pt[10], &pt[11], &pt[12], &pt[13],
-                     &pt[14], &pt[15]);
-}
-
-static int32_t sscanf_uint32_as_hhx(const char *from, uint32_t *value){
-	return tiny_sscanf(from, "%hhx:%hhx:%hhx:%hhx",
-			&((unsigned char *)(value))[3],
-			&((unsigned char *)(value))[2],
-			&((unsigned char *)(value))[1],
-			&((unsigned char *)(value))[0]);
-}

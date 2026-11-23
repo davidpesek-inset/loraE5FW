@@ -67,11 +67,15 @@ LW_Status_t dev_uart_baud_set(uint32_t baud);
 LW_Status_t dev_uart_timeout_set(uint16_t ms);
 
 /**
- * @brief Sets the automatic low power mode (AT+LOWPOWER=AUTOON / AUTOOFF), RAM only.
+ * @brief Sets the automatic low power mode (AT+LOWPOWER=AUTOON / AUTOOFF), stored in EEPROM.
  *
- * @param on true = Stop mode whenever idle, false = Sleep mode only (UTIL_SEQ_Idle()).
+ * Takes effect immediately (UTIL_SEQ_Idle()), the RAM copy is set also when the EEPROM write fails.
+ *
+ * @param on true = Stop mode whenever idle, false = Sleep mode only.
+ * @retval LW_OK    Success.
+ * @retval LW_ERROR EEPROM write failed.
  */
-void dev_lowpower_auto_set(bool on);
+LW_Status_t dev_lowpower_auto_set(bool on);
 
 /**
  * @brief Enters Stop mode once, until the next character on the UART (AT+LOWPOWER).

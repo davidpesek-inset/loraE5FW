@@ -83,14 +83,7 @@ typedef enum eATEerror
 /* Keys, IDs and EUIs management commands */
 #define AT_NWKKEY     "+NWKKEY"
 #define AT_APPKEY     "+APPKEY"
-#define AT_NWKSKEY    "+NWKSKEY"
-#define AT_APPSKEY    "+APPSKEY"
-#define AT_DADDR      "+DADDR"
 #define AT_DEUI       "+DEUI"
-#define AT_NWKID      "+NWKID"
-
-/* LoRaWAN join and send data commands */
-#define AT_LINKC      "+LINKC"
 
 /* LoRaWAN network management commands */
 #define AT_ADR        "+ADR"
@@ -98,17 +91,6 @@ typedef enum eATEerror
 #define AT_CLASS      "+CLASS"
 #define AT_JN1DL      "+JN1DL"
 #define AT_JN2DL      "+JN2DL"
-#define AT_RX2DR      "+RX2DR"
-#define AT_RX2FQ      "+RX2FQ"
-#define AT_PGSLOT     "+PGSLOT"
-
-/* Radio tests commands */
-#define AT_TTH        "+TTH"
-#define AT_TOFF       "+TOFF"
-
-/* Radio access commands */
-#define AT_REGW       "+REGW"
-#define AT_REGR       "+REGR"
 
 /* USER CODE BEGIN EM */
 // INSET commands
@@ -133,16 +115,10 @@ typedef enum eATEerror
 #define AT_TEST		   "+TEST"
 #define AT_LOWPOWER	   "+LOWPOWER"
 #define AT_UART		   "+UART"
+#define AT_PROFILE	   "+PROFILE"
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
-/**
-  * @brief  Return AT_OK in all cases
-  * @param  param string of the AT command - unused
-  * @retval AT_OK
-  */
-ATEerror_t AT_return_ok(const char *param);
-
 /**
   * @brief  Return AT_ERROR in all cases
   * @param  param string of the AT command - unused
@@ -239,48 +215,6 @@ ATEerror_t AT_AppKey_get(const char *param);
 ATEerror_t AT_AppKey_set(const char *param);
 
 /**
-  * @brief  Print Network Session Key
-  * @param  param string of the AT command
-  * @retval AT_OK
-  */
-ATEerror_t AT_NwkSKey_get(const char *param);
-
-/**
-  * @brief  Set Network Session Key
-  * @param  param String pointing to provided DevAddr
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_NwkSKey_set(const char *param);
-
-/**
-  * @brief  Print Application Session Key
-  * @param  param string of the AT command
-  * @retval AT_OK
-  */
-ATEerror_t AT_AppSKey_get(const char *param);
-
-/**
-  * @brief  Set Application Session Key
-  * @param  param String pointing to provided DevAddr
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_AppSKey_set(const char *param);
-
-/**
-  * @brief  Print the DevAddr
-  * @param  param String pointing to provided DevAddr
-  * @retval AT_OK
-  */
-ATEerror_t AT_DevAddr_get(const char *param);
-
-/**
-  * @brief  Set DevAddr
-  * @param  param String pointing to provided DevAddr
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_DevAddr_set(const char *param);
-
-/**
   * @brief  Print Device EUI
   * @param  param string of the AT command - unused
   * @retval AT_OK
@@ -293,28 +227,6 @@ ATEerror_t AT_DevEUI_get(const char *param);
   * @retval AT_OK if OK
   */
 ATEerror_t AT_DevEUI_set(const char *param);
-
-/**
-  * @brief  Print the Network ID
-  * @param  param String pointing to provided parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_NetworkID_get(const char *param);
-
-/**
-  * @brief  Set the Network ID
-  * @param  param String pointing to provided parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_NetworkID_set(const char *param);
-
-/* --------------- LoRaWAN join and send data commands --------------- */
-/**
-  * @brief  Piggyback a Link Check Request to the next uplink
-  * @param  param String parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Link_Check(const char *param);
 
 /* --------------- LoRaWAN network management commands --------------- */
 /**
@@ -387,86 +299,12 @@ ATEerror_t AT_JoinAcceptDelay2_get(const char *param);
   */
 ATEerror_t AT_JoinAcceptDelay2_set(const char *param);
 
-/**
-  * @brief  Print Rx2 window data rate
-  * @param  param String pointing to parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx2DataRate_get(const char *param);
-
-/**
-  * @brief  Set Rx2 window data rate
-  * @param  param String pointing to parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx2DataRate_set(const char *param);
-
-/**
-  * @brief  Print Rx2 window frequency
-  * @param  param String pointing to parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx2Frequency_get(const char *param);
-
-/**
-  * @brief  Set Rx2 window frequency
-  * @param  param String pointing to parameter
-  * @retval AT_OK if OK, or an appropriate AT_xxx error code
-  */
-ATEerror_t AT_Rx2Frequency_set(const char *param);
-
-/**
-  * @brief  Get the unicast pingslot periodicity, Data rate and PsFrequency
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_PingSlot_get(const char *param);
-
-/**
-  * @brief  Set the unicast pingslot periodicity
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_PingSlot_set(const char *param);
-
-/* --------------- Radio tests commands --------------- */
-/**
-  * @brief  Start Tx hopping
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_tx_hopping(const char *param);
-
-/**
-  * @brief  stop Rx or Tx test
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_test_stop(const char *param);
-
-/* --------------- Radio access commands --------------- */
-/**
-  * @brief  Write Radio Register
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_write_register(const char *param);
-
-/**
-  * @brief  Read Radio Register
-  * @param  param String parameter
-  * @retval AT_OK
-  */
-ATEerror_t AT_read_register(const char *param);
-
 /* USER CODE BEGIN EFP */
 // INSET commands
 ATEerror_t AT_wdt_set(const char *param);
 ATEerror_t AT_wdt_get(const char *param);
 ATEerror_t AT_log_set(const char *param);
 ATEerror_t AT_ch_set(const char *param);
-void AT_ch_debug_print(uint8_t id);
-ATEerror_t AT_ch_get(const char *param);
 ATEerror_t AT_mode_set(const char *param);
 ATEerror_t AT_mode_get(const char *param);
 ATEerror_t AT_power_set(const char *param);
@@ -493,6 +331,8 @@ ATEerror_t AT_test_set(const char *param);
 ATEerror_t AT_lowpower_set(const char *param);
 ATEerror_t AT_lowpower_run(const char *param);
 ATEerror_t AT_uart_set(const char *param);
+ATEerror_t AT_profile_set(const char *param);
+ATEerror_t AT_profile_get(const char *param);
 /* USER CODE END EFP */
 
 #ifdef __cplusplus

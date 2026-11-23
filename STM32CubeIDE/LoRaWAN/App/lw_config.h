@@ -3,7 +3,7 @@
  * @author  pesek
  * @date    30. 10. 2026
  * @brief   LoRaWAN parameters set in the stack (region, DR, channels, class, ADR, power, duty cycle,
- *          network type, RX delays, frame counters, session keys, DevAddr).
+ *          network type, RX delays, frame counters).
  *
  * Most setters change the LoRaWAN NVM context and set @c nvm_dirty: the change acts immediately
  * and is kept over a reset only after lw_nvm_store() (also called by dev_reset()).
@@ -78,6 +78,20 @@ LW_Status_t lw_dr_set(uint8_t dr);
  * @retval LW_BUSY_ERROR  LoRaMac busy.
  */
 LW_Status_t lw_ch_set(uint32_t id, uint32_t dr_min, uint32_t dr_max, uint32_t freq);
+
+/**
+ * @brief Disables a channel: clears its mask bit and its parameters in the NVM context.
+ *
+ * Like lw_ch_set(), it also works for the default channels 0..2. Keep at least one channel
+ * enabled, the stack cannot send without one.
+ *
+ * @param id Channel index 0..15.
+ * @retval LW_OK          Disabled, or already disabled.
+ * @retval LW_PARAM_ERROR Invalid index.
+ * @retval LW_ERROR       NVM context not available.
+ * @retval LW_BUSY_ERROR  LoRaMac busy.
+ */
+LW_Status_t lw_ch_disable(uint32_t id);
 
 /**
  * @brief Sets the device class (AT+CLASS).
@@ -181,42 +195,5 @@ LW_Status_t lw_ul_set(uint32_t ul);
  * @retval LW_BUSY_ERROR LoRaMac busy.
  */
 LW_Status_t lw_dl_set(uint32_t dl);
-
-/**
- * @brief Sets the network session key (AT+KEY=NWKSKEY).
- *
- * Refused while a session is active: call before the ABP activation (lw_mode_set(0)),
- * or deactivate first with lw_abp_deactivate().
- *
- * @param key 16 bytes as a string of hex pairs separated by ':', e.g. "2B:7E:15:...:3C".
- * @retval LW_OK          Success.
- * @retval LW_PARAM_ERROR Wrong format.
- * @retval LW_ERROR       Refused by LmHandlerSetKey() (session active).
- */
-LW_Status_t lw_nwkskey_set(const char *key);
-
-/**
- * @brief Sets the application session key (AT+KEY=APPSKEY).
- *
- * Same rules as lw_nwkskey_set().
- *
- * @param key 16 bytes as a string of hex pairs separated by ':', e.g. "2B:7E:15:...:3C".
- * @retval LW_OK          Success.
- * @retval LW_PARAM_ERROR Wrong format.
- * @retval LW_ERROR       Refused by LmHandlerSetKey() (session active).
- */
-LW_Status_t lw_appskey_set(const char *key);
-
-/**
- * @brief Sets the device address (AT+ID=DevAddr).
- *
- * Refused while a session is active, same as lw_nwkskey_set().
- *
- * @param devaddr 4 bytes MSB first, hex pairs separated by ':', e.g. "00:18:1F:F1" = 0x00181FF1.
- * @retval LW_OK          Success.
- * @retval LW_PARAM_ERROR Wrong format.
- * @retval LW_ERROR       Refused by LmHandlerSetDevAddr() (session active).
- */
-LW_Status_t lw_devaddr_set(const char *devaddr);
 
 #endif /* LORAWAN_APP_LW_CONFIG_H_ */

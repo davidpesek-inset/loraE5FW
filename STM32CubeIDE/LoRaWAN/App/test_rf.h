@@ -89,14 +89,6 @@ typedef struct
 
 /* Exported functions ------------------------------------------------------- */
 /**
-  * @brief RF Transmit LORA test command
-  * @note Transmits [0x00, 0x11, 0x22, ... 0xFF]
-  * @param[in] nb_packet nb of packets
-  * @retval status 0 ok, -1 ko
-  */
-int32_t TST_TX_Start(int32_t nb_packet);
-
-/**
   * @brief RF Set Radio Configuration test command
   * @param[in] Param Pointer config param
   * @retval status 0 ok, -1 ko
